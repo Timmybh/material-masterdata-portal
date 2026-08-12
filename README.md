@@ -20,10 +20,5 @@ k8s/        Kubernetes manifests
 ```
 
 ## PostgreSQL local
-- Host: localhost
-- Port: 5432
-- Database: masterdata
-- User: postgres
-- Password dev mặc định: 12345678
 
 > Không sử dụng mật khẩu dev mặc định cho môi trường production.
