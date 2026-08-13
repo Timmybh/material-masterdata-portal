@@ -23,7 +23,7 @@ services:
     volumes:
       - ./database/seed:/seed:ro
     command: >
-      sh -c "psql -h db -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-masterdata} -v ON_ERROR_STOP=1 -f /seed/seed_v1_4_2.sql"
+      sh -c "psql -h db -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-masterdata} -v ON_ERROR_STOP=1 -f /seed/seed_v1_4_2.sql && psql -h db -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-masterdata} -v ON_ERROR_STOP=1 -f /seed/v1_5_auth.sql"
     depends_on:
       db:
         condition: service_healthy
@@ -33,6 +33,7 @@ services:
     build: ./backend
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:12345678@db:5432/masterdata}
+      JWT_SECRET: ${JWT_SECRET:-material-masterdata-local-dev-secret}
     ports:
       - "8000:8000"
     depends_on:
