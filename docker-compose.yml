@@ -16,6 +16,19 @@ services:
       timeout: 5s
       retries: 10
 
+  seed:
+    image: postgres:16-alpine
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-12345678}
+    volumes:
+      - ./database/seed:/seed:ro
+    command: >
+      sh -c "psql -h db -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-masterdata} -v ON_ERROR_STOP=1 -f /seed/seed_v1_4_2.sql"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   backend:
     build: ./backend
     environment:
@@ -25,6 +38,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      seed:
+        condition: service_completed_successfully
 
   frontend:
     build: ./frontend
