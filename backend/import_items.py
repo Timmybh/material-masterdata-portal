@@ -1,6 +1,7 @@
-import argparse,json
+import argparse,csv,json
 from datetime import datetime,timedelta
 from decimal import Decimal,InvalidOperation
+from pathlib import Path
 from openpyxl import load_workbook
 from sqlalchemy.dialects.postgresql import insert
 from unidecode import unidecode
@@ -21,15 +22,22 @@ def as_date(v):
     try:return datetime.fromisoformat(str(v))
     except ValueError:return None
 def norm(*parts):return " ".join(unidecode(str(x)).lower().strip() for x in parts if clean(x) is not None)
+def source_rows(path):
+    if Path(path).suffix.lower()==".csv":
+        f=open(path,newline="",encoding="utf-8-sig")
+        reader=csv.reader(f)
+        return next(reader),reader,f
+    wb=load_workbook(path,read_only=True,data_only=True);ws=wb[wb.sheetnames[0]]
+    rows=ws.iter_rows(values_only=True)
+    return next(rows),rows,wb
 def run(path:str):
-    init_db();wb=load_workbook(path,read_only=True,data_only=True);ws=wb[wb.sheetnames[0]]
-    raw_headers=[c.value for c in next(ws.iter_rows(min_row=1,max_row=1))]
-    headers=[h if h is not None else f"__unnamed_{i}" for i,h in enumerate(raw_headers)];pos={h:i for i,h in enumerate(headers)}
+    init_db();raw_headers,rows,source=source_rows(path)
+    headers=[h if h not in (None,"") else f"__unnamed_{i}" for i,h in enumerate(raw_headers)];pos={h:i for i,h in enumerate(headers)}
     missing={"Id","Code","Name","ItemTypeName"}-set(pos)
     if missing:raise ValueError(f"Thiếu cột bắt buộc: {', '.join(sorted(missing))}")
     batch=[];total=skipped=0
     with SessionLocal() as db:
-      for row in ws.iter_rows(min_row=2,values_only=True):
+      for row in rows:
         data={dest:clean(row[pos[src]]) for src,dest in COLUMNS.items() if src in pos}
         if not data.get("id") or not data.get("code") or not data.get("name"):skipped+=1;continue
         for k in BOOL_FIELDS:data[k]=as_bool(data.get(k))
@@ -49,6 +57,6 @@ def run(path:str):
             stmt=insert(Item).values(batch);db.execute(stmt.on_conflict_do_update(index_elements=[Item.id],set_={k:getattr(stmt.excluded,k) for k in batch[0] if k!="id"}));db.commit();total+=len(batch);print(f"Imported {total}");batch=[]
       if batch:
         stmt=insert(Item).values(batch);db.execute(stmt.on_conflict_do_update(index_elements=[Item.id],set_={k:getattr(stmt.excluded,k) for k in batch[0] if k!="id"}));db.commit();total+=len(batch)
-    print(f"Done: {total} items; skipped: {skipped}")
+    source.close();print(f"Done: {total} items; skipped: {skipped}")
 if __name__=="__main__":
     p=argparse.ArgumentParser();p.add_argument("xlsx");run(p.parse_args().xlsx)

@@ -4,3 +4,4 @@ __pycache__/
 .pytest_cache/
 frontend/tsconfig.tsbuildinfo
 k8s/secret.yaml
+data/*.xlsx

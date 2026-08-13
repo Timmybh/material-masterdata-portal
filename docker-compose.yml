@@ -25,7 +25,7 @@ services:
         condition: service_healthy
     volumes:
       - "./data:/data:ro"
-    command: ["python", "import_items.py", "/data/Danh muc vat tu.xlsx"]
+    command: ["python", "import_items.py", "/data/Danh muc vat tu.csv"]
     restart: "no"
 
   backend:
