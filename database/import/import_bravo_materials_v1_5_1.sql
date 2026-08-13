@@ -1,0 +1,3 @@
+-- Import file intentionally kept local because generated Excel dataset is large.
+-- Run the generated SQL supplied with V1.5.1 against PostgreSQL.
+-- Source: Bravo Excel export / sheet vB20Item.
