@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './style.css';
 
 const API_URL = 'http://localhost:8000';
+const DEMO_REQUESTER_EMAIL = 'user@example.com';
 
 type Material = {
   id: number;
@@ -60,6 +61,7 @@ const statusLabels: Record<string, string> = {
   PENDING_MASTERDATA: 'Chờ Masterdata duyệt',
   PENDING_ACCOUNTING: 'Chờ Kế toán duyệt',
   PENDING_CODE_ASSIGNMENT: 'Chờ Masterdata cấp mã',
+  RETURNED_TO_REQUESTER: 'Đã trả lại người lập',
   COMPLETED: 'Hoàn tất',
   REJECTED: 'Từ chối',
 };
@@ -142,7 +144,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...requestForm,
-          requester_email: 'user@example.com',
+          requester_email: DEMO_REQUESTER_EMAIL,
         }),
       });
 
@@ -179,25 +181,44 @@ function App() {
 
   async function transitionRequest(
     request: MaterialRequest,
-    action: 'APPROVE' | 'REJECT' | 'ASSIGN_CODE',
+    action: 'APPROVE' | 'RETURN' | 'REJECT' | 'ASSIGN_CODE' | 'RESUBMIT',
   ) {
     let actorEmail = 'masterdata@example.com';
     let note = '';
     let materialCode = '';
 
-    if (request.status === 'PENDING_ACCOUNTING') {
-      actorEmail = 'accounting@example.com';
-    }
+    if (request.status === 'PENDING_ACCOUNTING') actorEmail = 'accounting@example.com';
+    if (action === 'RESUBMIT') actorEmail = request.requester_email || DEMO_REQUESTER_EMAIL;
 
-    if (action === 'REJECT') {
-      note = window.prompt('Nhập lý do từ chối:') || '';
+    if (action === 'RETURN') {
+      const entered = window.prompt('Nhập lý do trả lại người lập:');
+      if (entered === null) return;
+      note = entered.trim();
+      if (!note) {
+        setError('Cần nhập lý do trả lại người lập.');
+        return;
+      }
+    } else if (action === 'REJECT') {
+      const entered = window.prompt('Nhập lý do từ chối:');
+      if (entered === null) return;
+      note = entered.trim();
       if (!note) return;
     } else if (action === 'APPROVE') {
-      note = window.prompt('Ghi chú duyệt (có thể để trống):') || '';
+      const entered = window.prompt('Ghi chú duyệt (có thể để trống):');
+      if (entered === null) return;
+      note = entered;
     } else if (action === 'ASSIGN_CODE') {
-      materialCode = window.prompt('Nhập mã vật tư được cấp:') || '';
+      const code = window.prompt('Nhập mã vật tư được cấp:');
+      if (code === null) return;
+      materialCode = code.trim();
       if (!materialCode) return;
-      note = window.prompt('Ghi chú cấp mã (có thể để trống):') || '';
+      const entered = window.prompt('Ghi chú cấp mã (có thể để trống):');
+      if (entered === null) return;
+      note = entered;
+    } else if (action === 'RESUBMIT') {
+      const confirmed = window.confirm('Gửi lại yêu cầu này cho Masterdata duyệt từ đầu?');
+      if (!confirmed) return;
+      note = 'Người lập gửi duyệt lại sau khi cập nhật';
     }
 
     setError('');
@@ -224,12 +245,52 @@ function App() {
     }
   }
 
+  async function editReturnedRequest(request: MaterialRequest) {
+    const proposedName = window.prompt('Tên vật tư:', request.proposed_name);
+    if (proposedName === null) return;
+    if (!proposedName.trim()) {
+      setError('Tên vật tư không được để trống.');
+      return;
+    }
+
+    const unit = window.prompt('Đơn vị tính:', request.unit || '');
+    if (unit === null) return;
+
+    const materialGroup = window.prompt('Nhóm vật tư:', request.material_group || '');
+    if (materialGroup === null) return;
+
+    const description = window.prompt('Mô tả:', request.description || '');
+    if (description === null) return;
+
+    setError('');
+    try {
+      const response = await fetch(`${API_URL}/api/v1/requests/${request.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proposed_name: proposedName.trim(),
+          unit: unit.trim() || null,
+          material_group: materialGroup.trim() || null,
+          description: description.trim() || null,
+          editor_email: request.requester_email || DEMO_REQUESTER_EMAIL,
+        }),
+      });
+      const updated = await response.json();
+      if (!response.ok) throw new Error(updated.detail || 'Không thể cập nhật yêu cầu.');
+      await loadRequests(statusFilter);
+      const shouldResubmit = window.confirm('Đã cập nhật yêu cầu. Gửi duyệt lại ngay bây giờ?');
+      if (shouldResubmit) await transitionRequest(updated, 'RESUBMIT');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Có lỗi xảy ra.');
+    }
+  }
+
   function renderActions(request: MaterialRequest) {
     if (request.status === 'PENDING_MASTERDATA') {
       return (
         <div className="actions">
           <button className="small approve" onClick={() => transitionRequest(request, 'APPROVE')}>Masterdata duyệt</button>
-          <button className="small reject" onClick={() => transitionRequest(request, 'REJECT')}>Từ chối</button>
+          <button className="small reject" onClick={() => transitionRequest(request, 'RETURN')}>Trả lại người lập</button>
         </div>
       );
     }
@@ -237,7 +298,7 @@ function App() {
       return (
         <div className="actions">
           <button className="small approve" onClick={() => transitionRequest(request, 'APPROVE')}>Kế toán duyệt</button>
-          <button className="small reject" onClick={() => transitionRequest(request, 'REJECT')}>Từ chối</button>
+          <button className="small reject" onClick={() => transitionRequest(request, 'RETURN')}>Trả lại người lập</button>
         </div>
       );
     }
@@ -245,7 +306,15 @@ function App() {
       return (
         <div className="actions">
           <button className="small approve" onClick={() => transitionRequest(request, 'ASSIGN_CODE')}>Cấp mã vật tư</button>
-          <button className="small reject" onClick={() => transitionRequest(request, 'REJECT')}>Từ chối</button>
+          <button className="small reject" onClick={() => transitionRequest(request, 'RETURN')}>Trả lại người lập</button>
+        </div>
+      );
+    }
+    if (request.status === 'RETURNED_TO_REQUESTER') {
+      return (
+        <div className="actions">
+          <button className="small approve" onClick={() => editReturnedRequest(request)}>Sửa yêu cầu</button>
+          <button className="small" onClick={() => transitionRequest(request, 'RESUBMIT')}>Gửi duyệt lại</button>
         </div>
       );
     }
@@ -255,7 +324,7 @@ function App() {
   return (
     <main className="page">
       <section className="hero">
-        <span className="badge">Material Masterdata Portal V1.4</span>
+        <span className="badge">Material Masterdata Portal V1.4.1</span>
         <h1>Tra cứu vật tư & tạo yêu cầu đặt mã hàng</h1>
         <p>Tra cứu trước khi tạo mã mới và theo dõi toàn bộ quy trình phê duyệt.</p>
 
@@ -380,6 +449,7 @@ function App() {
             ['PENDING_MASTERDATA', 'Chờ Masterdata'],
             ['PENDING_ACCOUNTING', 'Chờ Kế toán'],
             ['PENDING_CODE_ASSIGNMENT', 'Chờ cấp mã'],
+            ['RETURNED_TO_REQUESTER', 'Trả lại người lập'],
             ['COMPLETED', 'Hoàn tất'],
             ['REJECTED', 'Từ chối'],
           ].map(([value, label]) => (
@@ -415,12 +485,12 @@ function App() {
       </section>
 
       <section className="workflow">
-        <span className="eyebrow">WORKFLOW V1.4</span>
+        <span className="eyebrow">WORKFLOW V1.4.1</span>
         <h2>Quy trình phê duyệt</h2>
         <div className="steps">
-          <div>1. Người dùng tạo yêu cầu</div><b>→</b>
-          <div>2. Masterdata duyệt</div><b>→</b>
-          <div>3. Kế toán duyệt</div><b>→</b>
+          <div>1. Người dùng tạo / gửi lại</div><b>→</b>
+          <div>2. Masterdata duyệt hoặc trả lại</div><b>→</b>
+          <div>3. Kế toán duyệt hoặc trả lại</div><b>→</b>
           <div>4. Masterdata cấp mã</div><b>→</b>
           <div>5. Hoàn tất</div>
         </div>
