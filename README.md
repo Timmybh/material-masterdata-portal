@@ -24,7 +24,7 @@ docker compose up -d --build
 
 Truy cập `http://localhost:8080`. PostgreSQL mặc định: `localhost:5432`, database `masterdata`, user `postgres`, password `12345678`.
 
-Service `db-init` tự tạo/nâng cấp schema và upsert dữ liệu từ `data/Danh muc vat tu.csv`. CSV được dùng làm seed để tránh hỏng file nhị phân khi đồng bộ Git; importer vẫn hỗ trợ cả CSV và XLSX.
+Service `db-init` tự tạo/nâng cấp schema và upsert dữ liệu từ `data/Danh muc vat tu.xlsx`. File dữ liệu lớn không lưu trong Git để tránh hỏng file nhị phân khi clone; hãy copy file Excel gốc vào thư mục `data` trước khi chạy reset. Script sẽ kiểm tra chữ ký XLSX trước khi xóa database cũ.
 
 ```powershell
 ./scripts/init-db-and-data.ps1
