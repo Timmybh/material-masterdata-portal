@@ -10,12 +10,12 @@ class UserOut(BaseModel):
     model_config={"from_attributes":True}
 class AuthOut(BaseModel): access_token: str; token_type: str="bearer"; user: UserOut
 class ItemOut(BaseModel):
-    id:int; new_code:str|None=None; old_code:str|None=None; code:str; parent_id:int|None=None; is_group:bool; name:str; item_type_name:str
+    id:int; new_code:str|None=None; old_code:str|None=None; code:str; parent_id:int|None=None; is_group:bool; source_extra_1:str|None=None; source_extra_2:str|None=None; name:str; item_type_name:str
     name2:str|None=None; item_custom:str|None=None; is_customs:bool; is_item_with_color:bool; is_item_with_size:bool; is_item_with_art:bool
     is_item_with_product_cost_id:bool; is_item_with_biz_doc_id_c2:bool; is_item_with_symmetrical:bool; is_item_with_color_product:bool
     parent_code:str|None=None; item_group_code:str|None=None; kind_code:str|None=None; customer_code:str|None=None; product_cost_info:str|None=None
     product_item_code:str|None=None; branch_code:str|None=None; is_material:bool; unit_price:Decimal|None=None; is_active:bool
-    source_created_by:int|None=None; source_created_at:datetime|None=None; source_modified_by:int|None=None; source_modified_at:datetime|None=None; score:float|None=None
+    source_created_by:int|None=None; source_created_at:datetime|None=None; source_modified_by:int|None=None; source_modified_at:datetime|None=None; source_select_key:bool|None=None; score:float|None=None
     model_config={"from_attributes":True}
 class ItemSearchOut(BaseModel): items:list[ItemOut]; total:int; limit:int; query:str
 class RequestFields(BaseModel):
