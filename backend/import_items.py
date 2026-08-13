@@ -39,7 +39,7 @@ def run(path:str):
     with SessionLocal() as db:
       for row in rows:
         data={dest:clean(row[pos[src]]) for src,dest in COLUMNS.items() if src in pos}
-        if not data.get("id") or not data.get("code") or not data.get("name"):skipped+=1;continue
+        if data.get("id") is None or data.get("code") is None or data.get("name") is None:skipped+=1;continue
         for k in BOOL_FIELDS:data[k]=as_bool(data.get(k))
         for k in DATE_FIELDS:data[k]=as_date(data.get(k))
         for k in INT_FIELDS:
