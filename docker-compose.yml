@@ -23,7 +23,7 @@ services:
     volumes:
       - ./database/seed:/seed:ro
     command: >
-      sh -c "psql -h db -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-masterdata} -v ON_ERROR_STOP=1 -f /seed/seed_v1_4_2.sql && psql -h db -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-masterdata} -v ON_ERROR_STOP=1 -f /seed/v1_5_auth.sql"
+      sh -c "psql -h db -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-masterdata} -v ON_ERROR_STOP=1 -f /seed/seed_v1_4_2.sql && psql -h db -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-masterdata} -v ON_ERROR_STOP=1 -f /seed/v1_5_auth.sql && psql -h db -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-masterdata} -v ON_ERROR_STOP=1 -f /seed/v1_5_1_workflow_email.sql"
     depends_on:
       db:
         condition: service_healthy
@@ -34,6 +34,12 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:12345678@db:5432/masterdata}
       JWT_SECRET: ${JWT_SECRET:-material-masterdata-local-dev-secret}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
     ports:
       - "8000:8000"
     depends_on:
