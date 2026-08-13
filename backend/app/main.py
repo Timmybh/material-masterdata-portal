@@ -17,7 +17,7 @@ engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)
 
 app = FastAPI(
     title="Material Masterdata Portal API",
-    version="1.4.0",
+    version="1.4.1",
 )
 
 app.add_middleware(
@@ -38,6 +38,14 @@ class MaterialRequestCreate(BaseModel):
     unit: str | None = Field(default=None, max_length=50)
     material_group: str | None = Field(default=None, max_length=100)
     requester_email: str = Field(default="user@example.com", max_length=255)
+
+
+class MaterialRequestUpdate(BaseModel):
+    proposed_name: str = Field(min_length=2, max_length=500)
+    description: str | None = Field(default=None, max_length=4000)
+    unit: str | None = Field(default=None, max_length=50)
+    material_group: str | None = Field(default=None, max_length=100)
+    editor_email: str = Field(max_length=255)
 
 
 class WorkflowTransition(BaseModel):
@@ -84,7 +92,7 @@ async def health():
         "status": "ok" if database == "ok" else "degraded",
         "service": "material-masterdata-portal",
         "database": database,
-        "version": "1.4.0",
+        "version": "1.4.1",
     }
 
 
@@ -92,11 +100,12 @@ async def health():
 async def api_root():
     return {
         "name": "Material Masterdata Portal",
-        "version": "1.4.0",
+        "version": "1.4.1",
         "workflow": [
             "PENDING_MASTERDATA",
             "PENDING_ACCOUNTING",
             "PENDING_CODE_ASSIGNMENT",
+            "RETURNED_TO_REQUESTER",
             "COMPLETED",
             "REJECTED",
         ],
@@ -234,6 +243,83 @@ async def create_material_request(payload: MaterialRequestCreate):
     return created
 
 
+@app.patch("/api/v1/requests/{request_id}")
+async def update_returned_request(request_id: int, payload: MaterialRequestUpdate):
+    async with engine.begin() as conn:
+        current_result = await conn.execute(
+            text(
+                """
+                SELECT r.*, u.email AS requester_email
+                FROM material_requests r
+                JOIN users u ON u.id = r.requester_id
+                WHERE r.id = :request_id
+                FOR UPDATE
+                """
+            ),
+            {"request_id": request_id},
+        )
+        current = current_result.mappings().one_or_none()
+        if current is None:
+            raise HTTPException(status_code=404, detail="Không tìm thấy yêu cầu")
+        if current["status"] != "RETURNED_TO_REQUESTER":
+            raise HTTPException(status_code=400, detail="Chỉ yêu cầu đã trả lại người lập mới được sửa")
+        if current["requester_email"] != payload.editor_email:
+            raise HTTPException(status_code=403, detail="Chỉ người lập yêu cầu được sửa")
+
+        editor_result = await conn.execute(
+            text("SELECT id FROM users WHERE email = :email AND is_active = TRUE LIMIT 1"),
+            {"email": payload.editor_email},
+        )
+        editor_id = editor_result.scalar_one_or_none()
+        if editor_id is None:
+            raise HTTPException(status_code=400, detail="Người sửa không tồn tại hoặc đã bị khóa")
+
+        await conn.execute(
+            text(
+                """
+                UPDATE material_requests
+                SET proposed_name = :proposed_name,
+                    description = :description,
+                    unit = :unit,
+                    material_group = :material_group,
+                    updated_at = NOW()
+                WHERE id = :request_id
+                """
+            ),
+            {
+                "request_id": request_id,
+                "proposed_name": payload.proposed_name.strip(),
+                "description": payload.description or None,
+                "unit": payload.unit or None,
+                "material_group": payload.material_group or None,
+            },
+        )
+
+        await conn.execute(
+            text(
+                """
+                INSERT INTO request_history (
+                    request_id, actor_id, action, from_status, to_status, note
+                )
+                VALUES (
+                    :request_id, :actor_id, 'EDIT_REQUEST',
+                    'RETURNED_TO_REQUESTER', 'RETURNED_TO_REQUESTER',
+                    'Người lập cập nhật lại nội dung yêu cầu'
+                )
+                """
+            ),
+            {"request_id": request_id, "actor_id": editor_id},
+        )
+
+        result = await conn.execute(
+            text(request_select_sql("WHERE r.id = :request_id")),
+            {"request_id": request_id},
+        )
+        updated = dict(result.mappings().one())
+
+    return updated
+
+
 @app.get("/api/v1/requests")
 async def list_requests(
     status: str | None = Query(default=None, max_length=50),
@@ -330,7 +416,23 @@ async def transition_request(request_id: int, payload: WorkflowTransition):
         update_fields: list[str] = ["updated_at = NOW()"]
         params: dict[str, object] = {"request_id": request_id}
 
-        if action == "REJECT":
+        if action == "RETURN":
+            if from_status not in {"PENDING_MASTERDATA", "PENDING_ACCOUNTING", "PENDING_CODE_ASSIGNMENT"}:
+                raise HTTPException(status_code=400, detail="Yêu cầu hiện tại không thể trả lại")
+            if from_status == "PENDING_ACCOUNTING" and actor["role"] != "ACCOUNTING":
+                raise HTTPException(status_code=403, detail="Chỉ Kế toán được trả lại ở bước này")
+            if from_status in {"PENDING_MASTERDATA", "PENDING_CODE_ASSIGNMENT"} and actor["role"] != "MASTERDATA":
+                raise HTTPException(status_code=403, detail="Chỉ Masterdata được trả lại ở bước này")
+            if not payload.note or not payload.note.strip():
+                raise HTTPException(status_code=400, detail="Cần nhập lý do trả lại người lập")
+            to_status = "RETURNED_TO_REQUESTER"
+
+        elif action == "RESUBMIT" and from_status == "RETURNED_TO_REQUESTER":
+            if actor["id"] != current["requester_id"]:
+                raise HTTPException(status_code=403, detail="Chỉ người lập yêu cầu được gửi duyệt lại")
+            to_status = "PENDING_MASTERDATA"
+
+        elif action == "REJECT":
             if from_status not in {"PENDING_MASTERDATA", "PENDING_ACCOUNTING", "PENDING_CODE_ASSIGNMENT"}:
                 raise HTTPException(status_code=400, detail="Yêu cầu hiện tại không thể từ chối")
             if actor["role"] not in {"MASTERDATA", "ACCOUNTING"}:
