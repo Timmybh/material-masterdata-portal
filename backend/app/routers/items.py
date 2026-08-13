@@ -1,5 +1,5 @@
 from fastapi import APIRouter,Depends,HTTPException,Query
-from sqlalchemy import desc,func,or_,select
+from sqlalchemy import and_,desc,func,or_,select
 from sqlalchemy.orm import Session
 from unidecode import unidecode
 from ..auth import current_user
@@ -9,9 +9,10 @@ from ..schemas import ItemOut,ItemSearchOut
 router=APIRouter(prefix="/api/items",tags=["items"])
 @router.get("/search",response_model=ItemSearchOut)
 def search_items(q:str=Query(min_length=1,max_length=200),limit:int=Query(20,ge=1,le=100),item_type:str|None=None,item_group:str|None=None,include_groups:bool=False,db:Session=Depends(get_db),_:User=Depends(current_user)):
-    nq=" ".join(unidecode(q).lower().split());tsq=func.websearch_to_tsquery("simple",nq);tsv=func.to_tsvector("simple",Item.search_text)
+    nq=" ".join(unidecode(q).lower().split());tokens=nq.split();tsq=func.websearch_to_tsquery("simple",nq);tsv=func.to_tsvector("simple",Item.search_text)
     score=(func.ts_rank_cd(tsv,tsq)*3+func.similarity(Item.search_text,nq)+func.similarity(func.lower(Item.code),nq)*1.5).label("score")
-    conditions=[Item.is_active.is_(True),or_(tsv.op("@@")(tsq),Item.search_text.op("%")(nq),func.lower(Item.code).op("%")(nq),func.lower(Item.code).contains(nq))]
+    all_tokens=[Item.search_text.ilike(f"%{token}%") for token in tokens]
+    conditions=[Item.is_active.is_(True),or_(tsv.op("@@")(tsq),and_(*all_tokens),Item.search_text.op("%")(nq),func.lower(Item.code).op("%")(nq),func.lower(Item.code).contains(nq),func.lower(func.coalesce(Item.old_code,"")).contains(nq),func.lower(func.coalesce(Item.new_code,"")).contains(nq))]
     if not include_groups:conditions.append(Item.is_group.is_(False))
     if item_type:conditions.append(Item.item_type_name==item_type)
     if item_group:conditions.append(Item.item_group_code==item_group)

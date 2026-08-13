@@ -33,6 +33,8 @@ class MasterdataUpdate(BaseModel):
 class ReasonIn(BaseModel): reason:str=Field(min_length=3)
 class CompleteIn(BaseModel): item_code:str=Field(min_length=1,max_length=100)
 class UserRoleUpdate(BaseModel): role:str; is_active:bool|None=None
+class AdminUserCreate(BaseModel):
+    email:EmailStr; name:str=Field(min_length=2,max_length=255); role:str="USER"; is_active:bool=True
 class RequestOut(RequestFields):
     id:UUID; result_item_code:str|None; status:str; returned_reason:str|None; submitted_at:datetime; created_at:datetime; updated_at:datetime; requester:UserOut
     model_config={"from_attributes":True}

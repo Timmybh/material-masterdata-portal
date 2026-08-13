@@ -14,6 +14,7 @@
 - Email tại từng bước chứa tên vật tư, ĐVT, thời gian gửi, người tạo và đầy đủ thông tin phân loại.
 - Email workflow hiện được tạm ngưng bằng `EMAIL_NOTIFICATIONS_ENABLED=false`. Đổi thành `true` khi cần bật lại.
 - Quản trị tài khoản, role và trạng thái hoạt động.
+- V1.5.2 khôi phục chức năng Admin tạo người dùng mới và mở rộng Full Text Search theo từng từ khóa, không dấu, mã cũ/mới và chuỗi gần đúng.
 
 ## Chạy bằng Docker Desktop
 
