@@ -1,24 +1,54 @@
-# Material Masterdata Portal
+# Material Masterdata Portal V1.5
 
-Dự án tạo yêu cầu đặt mã hàng.
+Ứng dụng tra cứu danh mục vật tư BRAVO và workflow yêu cầu tạo mã mới cho DOVITEC.
 
-## Mục tiêu
-- Tra cứu vật tư bằng PostgreSQL Full Text Search.
-- Đăng nhập bằng Google SSO.
-- Tạo yêu cầu đặt mã hàng.
-- Workflow duyệt: Người dùng → Nhân sự phụ trách Masterdata → Kế toán → trả kết quả.
-- Backend FastAPI, frontend React/Vite.
-- Hỗ trợ Docker và Kubernetes.
+## Thay đổi V1.5
 
-## Cấu trúc dự kiến
+- Tái cấu trúc bảng `items` theo `data/Danh muc vat tu.xlsx`: 22.806 dòng, 35 cột nguồn, 5 loại vật tư, 23 nhóm hàng và cây `ParentId`/`ParentCode`.
+- Lưu đầy đủ mã cũ/mới, tên phụ, loại, nhóm, phân loại, khách hàng, chi nhánh, thông tin giá thành, giá, các cờ màu/size/art và audit nguồn.
+- Các cột nguồn không có tên và `_SelectKey__cumontli` được giữ trong `extra_data`, không làm mất dữ liệu khi đồng bộ.
+- Tìm kiếm PostgreSQL FTS + trigram trên toàn bộ trường nhận diện; API trả tổng số kết quả và giao diện hiển thị `20/tổng số`.
+- Luồng trả lại hoàn chỉnh: Masterdata trả người lập → người lập sửa → gửi duyệt lại.
+- Nút **Hủy** trong màn hình duyệt không gọi API và không thay đổi trạng thái.
+- Email tại từng bước chứa tên vật tư, ĐVT, thời gian gửi, người tạo và đầy đủ thông tin phân loại.
+- Email workflow hiện được tạm ngưng bằng `EMAIL_NOTIFICATIONS_ENABLED=false`. Đổi thành `true` khi cần bật lại.
+- Quản trị tài khoản, role và trạng thái hoạt động.
 
-```text
-frontend/   React + Vite
-backend/    FastAPI
- database/  PostgreSQL schema + seed data
-k8s/        Kubernetes manifests
+## Chạy bằng Docker Desktop
+
+```powershell
+Copy-Item .env.example .env
+docker compose up -d --build
 ```
 
-## PostgreSQL local
+Truy cập `http://localhost:8080`. PostgreSQL mặc định: `localhost:5432`, database `masterdata`, user `postgres`, password `12345678`.
 
-> Không sử dụng mật khẩu dev mặc định cho môi trường production.
+Service `db-init` tự tạo/nâng cấp schema và upsert dữ liệu từ `data/Danh muc vat tu.xlsx`. Import có thể chạy lại an toàn:
+
+```powershell
+./scripts/init-db-and-data.ps1
+```
+
+## API chính
+
+- `GET /api/items/search?q=...&limit=20`: trả `{items,total,limit,query}`.
+- `GET /api/items/{id}`: chi tiết đầy đủ vật tư.
+- `POST /api/requests`: tạo yêu cầu.
+- `PATCH /api/requests/{id}` và `POST /api/requests/{id}/resubmit`: sửa/gửi lại yêu cầu bị trả.
+- `/api/masterdata/*`, `/api/accounting/*`: duyệt và trả kết quả.
+- `/api/admin/users`: quản lý tài khoản và role.
+
+## Nâng cấp từ database cũ
+
+Backend chạy migration idempotent khi khởi động, sau đó `db-init` upsert lại toàn bộ danh mục. Dữ liệu yêu cầu và người dùng hiện có được giữ nguyên.
+
+## Kubernetes
+
+```powershell
+Copy-Item ./k8s/secret.example.yaml ./k8s/secret.yaml
+./scripts/build-images.ps1
+./scripts/deploy-k8s.ps1
+./scripts/import-seed.ps1
+```
+
+Khi triển khai production, đổi mật khẩu mặc định, JWT secret, cấu hình Google OAuth/SMTP, TLS, backup PostgreSQL và Secret management.

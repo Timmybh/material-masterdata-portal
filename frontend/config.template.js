@@ -1,0 +1,4 @@
+window.APP_CONFIG = {
+  API_URL: "${API_URL}",
+  GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+};

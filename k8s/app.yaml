@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: masterdata-backend}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: masterdata-backend}}
+  template:
+    metadata: {labels: {app: masterdata-backend}}
+    spec:
+      containers:
+      - name: backend
+        image: masterdata-backend:1.5.0
+        imagePullPolicy: IfNotPresent
+        envFrom: [{secretRef: {name: masterdata-secrets}}]
+        ports: [{containerPort: 8000}]
+        readinessProbe: {httpGet: {path: /health, port: 8000}, initialDelaySeconds: 5, periodSeconds: 10}
+        resources: {requests: {cpu: 100m, memory: 160Mi}, limits: {cpu: 1000m, memory: 768Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: backend}
+spec: {selector: {app: masterdata-backend}, ports: [{port: 8000, targetPort: 8000}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: masterdata-frontend}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: masterdata-frontend}}
+  template:
+    metadata: {labels: {app: masterdata-frontend}}
+    spec:
+      containers:
+      - name: frontend
+        image: masterdata-frontend:1.5.0
+        imagePullPolicy: IfNotPresent
+        envFrom: [{secretRef: {name: masterdata-secrets}}]
+        env:
+        - {name: API_URL, value: /api}
+        ports: [{containerPort: 80}]
+        resources: {requests: {cpu: 30m, memory: 32Mi}, limits: {cpu: 300m, memory: 128Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: masterdata-frontend}
+spec: {type: LoadBalancer, selector: {app: masterdata-frontend}, ports: [{port: 80, targetPort: 80}]}

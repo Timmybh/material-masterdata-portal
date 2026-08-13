@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+frontend/tsconfig.tsbuildinfo
+k8s/secret.yaml

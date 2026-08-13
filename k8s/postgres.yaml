@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: masterdata-postgres-pvc}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 10Gi}}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: postgres}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: postgres}}
+  template:
+    metadata: {labels: {app: postgres}}
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        envFrom: [{secretRef: {name: masterdata-secrets}}]
+        env:
+        - {name: POSTGRES_DB, value: masterdata}
+        - {name: POSTGRES_USER, value: postgres}
+        volumeMounts: [{name: data, mountPath: /var/lib/postgresql/data}]
+        ports: [{containerPort: 5432}]
+      volumes: [{name: data, persistentVolumeClaim: {claimName: masterdata-postgres-pvc}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: postgres}
+spec: {selector: {app: postgres}, ports: [{port: 5432, targetPort: 5432}]}

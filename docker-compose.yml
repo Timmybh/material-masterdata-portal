@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: masterdata
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "12345678"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d masterdata"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  db-init:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:12345678@postgres:5432/masterdata
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - "./data:/data:ro"
+    command: ["python", "import_items.py", "/data/Danh muc vat tu.xlsx"]
+    restart: "no"
+
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:12345678@postgres:5432/masterdata
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    volumes:
+      - "./data:/data:ro"
+
+  frontend:
+    build: ./frontend
+    env_file: .env
+    environment:
+      API_URL: /api
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata: {}
