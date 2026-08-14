@@ -88,8 +88,6 @@ class NamingSuggestionPayload(BaseModel):
 
 class NamingProposal(BaseModel):
     suggested_name: str
-    category_code: str | None
-    brand_code: str | None
     explanation: str
     warnings: list[str]
 
@@ -364,22 +362,16 @@ async def search_materials(q: str = Query(default='', max_length=200), limit: in
 @app.post('/api/v1/ai/suggest-name')
 async def suggest_name(payload:NamingSuggestionPayload, _:dict=Depends(current_user)):
     if not AI_NAMING_ENABLED: raise HTTPException(status_code=503,detail='Tính năng đề xuất tên đang tạm tắt')
-    async with engine.connect() as conn:
-        cr=await conn.execute(text('SELECT id,code,name FROM categories WHERE is_active=TRUE ORDER BY name')); categories=[dict(r) for r in cr.mappings().all()]
-        br=await conn.execute(text('SELECT id,code,name FROM brands WHERE is_active=TRUE ORDER BY name')); brands=[dict(r) for r in br.mappings().all()]
-    source=f"{payload.proposed_name} {payload.description or ''}".lower()
-    category=next((x for x in categories if x['name'].lower() in source),None)
-    brand=next((x for x in brands if x['name'].lower() in source),None)
     warnings=[]; explanation='Chuẩn hóa theo quy tắc đặt tên nội bộ.'; ai_source='rules'
     suggested=re.sub(r'\s+',' ',payload.proposed_name).strip(' ,-;')
     if OPENAI_API_KEY:
         try:
             proposal=(await AsyncOpenAI(api_key=OPENAI_API_KEY).responses.parse(
               model=OPENAI_MODEL,store=False,text_format=NamingProposal,
-              instructions=f"Bạn chuẩn hóa tên vật tư nhà máy may. Quy tắc: {COMPANY_NAMING_RULES} Chỉ chọn mã có trong danh sách, không đủ dữ liệu phải trả null. Categories: {categories}. Brands: {brands}.",
+              instructions=f"Bạn chuẩn hóa tên vật tư nhà máy may. Quy tắc: {COMPANY_NAMING_RULES} Chỉ dựa trên tên hiện tại và mô tả tính chất, quy cách, mục đích sử dụng; không phân loại chủng loại hoặc nhãn hiệu; không thêm dữ liệu chưa được cung cấp.",
               input=f"Tên nhập: {payload.proposed_name}\nMô tả/quy cách: {payload.description or ''}"
             )).output_parsed
-            suggested=proposal.suggested_name.strip();category=next((x for x in categories if x['code']==proposal.category_code),None);brand=next((x for x in brands if x['code']==proposal.brand_code),None)
+            suggested=proposal.suggested_name.strip()
             explanation=proposal.explanation;warnings=proposal.warnings;ai_source='openai'
         except Exception:
             warnings.append('AI không phản hồi; hệ thống đã dùng quy tắc nội bộ.')
@@ -400,8 +392,7 @@ async def suggest_name(payload:NamingSuggestionPayload, _:dict=Depends(current_u
           {'current_name':payload.proposed_name.strip(),'comparison_text':comparison_text})
         similar=[dict(r) for r in rr.mappings().all()]
     if similar:warnings.append(f'Tìm thấy {len(similar)} vật tư gần giống; cần kiểm tra trước khi tạo mã.')
-    return {'suggested_name':suggested,'category_id':category['id'] if category else None,'category_name':category['name'] if category else None,
-      'brand_id':brand['id'] if brand else None,'brand_name':brand['name'] if brand else None,'explanation':explanation,'warnings':warnings,'similar_items':similar,'source':ai_source}
+    return {'suggested_name':suggested,'explanation':explanation,'warnings':warnings,'similar_items':similar,'source':ai_source}
 
 
 @app.post('/api/v1/requests', status_code=201)
