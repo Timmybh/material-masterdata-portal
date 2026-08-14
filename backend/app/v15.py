@@ -384,9 +384,20 @@ async def suggest_name(payload:NamingSuggestionPayload, _:dict=Depends(current_u
         except Exception:
             warnings.append('AI không phản hồi; hệ thống đã dùng quy tắc nội bộ.')
     else: warnings.append('Chưa cấu hình OPENAI_API_KEY; đang dùng quy tắc nội bộ.')
+    comparison_text=re.sub(r'\s+',' ',f"{payload.proposed_name} {payload.description or ''}").strip()
     async with engine.connect() as conn:
-        rr=await conn.execute(text('''SELECT id,material_code,material_name,similarity(lower(material_name),lower(:name)) score FROM materials
-          WHERE similarity(lower(material_name),lower(:name))>=0.2 ORDER BY score DESC LIMIT 5'''),{'name':suggested})
+        rr=await conn.execute(text('''SELECT id,material_code,material_name,description,
+          GREATEST(
+            similarity(lower(material_name),lower(:current_name)),
+            similarity(lower(coalesce(material_name,'')||' '||coalesce(description,'')),lower(:comparison_text))
+          ) score
+          FROM materials
+          WHERE GREATEST(
+            similarity(lower(material_name),lower(:current_name)),
+            similarity(lower(coalesce(material_name,'')||' '||coalesce(description,'')),lower(:comparison_text))
+          )>=0.18
+          ORDER BY score DESC,material_code LIMIT 10'''),
+          {'current_name':payload.proposed_name.strip(),'comparison_text':comparison_text})
         similar=[dict(r) for r in rr.mappings().all()]
     if similar:warnings.append(f'Tìm thấy {len(similar)} vật tư gần giống; cần kiểm tra trước khi tạo mã.')
     return {'suggested_name':suggested,'category_id':category['id'] if category else None,'category_name':category['name'] if category else None,
