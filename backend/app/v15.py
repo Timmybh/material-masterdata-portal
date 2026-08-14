@@ -3,6 +3,7 @@ import base64
 import hashlib
 import hmac
 import os
+import re
 import smtplib
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -16,9 +17,10 @@ from jose import JWTError, jwt
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
+from openai import AsyncOpenAI
 
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql+asyncpg://postgres:12345678@db:5432/masterdata')
-JWT_SECRET = os.getenv('JWT_SECRET', 'change-me-v1-5')
+DATABASE_URL = os.environ['DATABASE_URL']
+JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRE_HOURS = 12
 SMTP_HOST = os.getenv('SMTP_HOST', '').strip()
@@ -27,10 +29,14 @@ SMTP_USER = os.getenv('SMTP_USER', '').strip()
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', '')
 SMTP_FROM = os.getenv('SMTP_FROM', SMTP_USER or 'no-reply@dovitec.local')
 SMTP_STARTTLS = os.getenv('SMTP_STARTTLS', 'true').lower() in {'1', 'true', 'yes', 'on'}
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '').strip()
+OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-5.6').strip()
+AI_NAMING_ENABLED = os.getenv('AI_NAMING_ENABLED', 'true').lower() in {'1','true','yes','on'}
+COMPANY_NAMING_RULES = os.getenv('COMPANY_NAMING_RULES', 'Tên tiếng Việt rõ nghĩa; thứ tự chủng loại - công dụng/đặc tính - nhãn hiệu - model/thông số; không thêm thông tin chưa được cung cấp.')
 
 engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)
 security = HTTPBearer(auto_error=False)
-app = FastAPI(title='Material Masterdata Portal API', version='1.5.1')
+app = FastAPI(title='Material Masterdata Portal API', version='1.5.2')
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=False, allow_methods=['*'], allow_headers=['*'])
 ROLES = {'USER', 'MASTERDATA', 'ACCOUNTING', 'ADMIN'}
 
@@ -61,6 +67,8 @@ class MaterialRequestCreate(BaseModel):
     description: str | None = Field(default=None, max_length=4000)
     unit: str | None = Field(default=None, max_length=50)
     material_group: str | None = Field(default=None, max_length=100)
+    category_id: int | None = None
+    brand_id: int | None = None
 
 
 class MaterialRequestUpdate(BaseModel):
@@ -69,6 +77,21 @@ class MaterialRequestUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=4000)
     unit: str | None = Field(default=None, max_length=50)
     material_group: str | None = Field(default=None, max_length=100)
+    category_id: int | None = None
+    brand_id: int | None = None
+
+
+class NamingSuggestionPayload(BaseModel):
+    proposed_name: str = Field(min_length=2, max_length=500)
+    description: str | None = Field(default=None, max_length=4000)
+
+
+class NamingProposal(BaseModel):
+    suggested_name: str
+    category_code: str | None
+    brand_code: str | None
+    explanation: str
+    warnings: list[str]
 
 
 class WorkflowTransition(BaseModel):
@@ -132,9 +155,11 @@ def require_role(*roles):
 
 def request_select_sql(where_clause: str = '') -> str:
     return f'''SELECT r.id,r.request_no,r.requester_id,u.email requester_email,u.full_name requester_name,
-      r.proposed_name,r.supplier_material_code,r.description,r.unit,r.material_group,r.status,r.masterdata_note,r.accounting_note,
+      r.proposed_name,r.supplier_material_code,r.description,r.unit,r.material_group,r.category_id,c.name category_name,
+      r.brand_id,b.name brand_name,r.status,r.masterdata_note,r.accounting_note,
       r.result_material_code,r.created_at,r.updated_at
-      FROM material_requests r LEFT JOIN users u ON u.id=r.requester_id {where_clause}'''
+      FROM material_requests r LEFT JOIN users u ON u.id=r.requester_id
+      LEFT JOIN categories c ON c.id=r.category_id LEFT JOIN brands b ON b.id=r.brand_id {where_clause}'''
 
 
 def full_material_email_html(request: dict, title: str, message: str) -> str:
@@ -235,7 +260,7 @@ async def health():
         db = 'ok'
     except Exception:
         db = 'error'
-    return {'status': 'ok' if db == 'ok' else 'degraded', 'database': db, 'service': 'material-masterdata-portal', 'version': '1.5.1', 'smtp_configured': bool(SMTP_HOST)}
+    return {'status': 'ok' if db == 'ok' else 'degraded', 'database': db, 'service': 'material-masterdata-portal', 'version': '1.5.2', 'smtp_configured': bool(SMTP_HOST), 'ai_naming_enabled': AI_NAMING_ENABLED}
 
 
 @app.post('/api/v1/auth/login')
@@ -306,19 +331,66 @@ async def get_sync_status(_: dict = Depends(current_user)):
     return dict(row) if row else {'source_name': 'BRAVO', 'last_synced_at': None, 'row_count': 0, 'status': 'UNKNOWN'}
 
 
+@app.get('/api/v1/categories')
+async def list_categories(_: dict = Depends(current_user)):
+    async with engine.connect() as conn:
+        result=await conn.execute(text('SELECT id,code,name FROM categories WHERE is_active=TRUE ORDER BY name'))
+        return {'items':[dict(r) for r in result.mappings().all()]}
+
+
+@app.get('/api/v1/brands')
+async def list_brands(_: dict = Depends(current_user)):
+    async with engine.connect() as conn:
+        result=await conn.execute(text('SELECT id,code,name FROM brands WHERE is_active=TRUE ORDER BY name'))
+        return {'items':[dict(r) for r in result.mappings().all()]}
+
+
 @app.get('/api/v1/materials/search')
 async def search_materials(q: str = Query(default='', max_length=200), limit: int = Query(default=20, ge=1, le=100), _: dict = Depends(current_user)):
     keyword = q.strip()
-    where = '''(:keyword='' OR to_tsvector('simple',coalesce(material_code,'')||' '||coalesce(material_name,'')||' '||coalesce(description,'')) @@ plainto_tsquery('simple',:keyword)
-      OR material_code ILIKE :pattern OR material_name ILIKE :pattern OR coalesce(description,'') ILIKE :pattern)'''
+    where = '''(:keyword='' OR to_tsvector('simple',coalesce(m.material_code,'')||' '||coalesce(m.material_name,'')||' '||coalesce(m.description,'')||' '||coalesce(c.name,'')||' '||coalesce(b.name,'')) @@ plainto_tsquery('simple',:keyword)
+      OR m.material_code ILIKE :pattern OR m.material_name ILIKE :pattern OR coalesce(m.description,'') ILIKE :pattern OR coalesce(c.name,'') ILIKE :pattern OR coalesce(b.name,'') ILIKE :pattern)'''
     params = {'keyword': keyword, 'pattern': f'%{keyword}%', 'limit': limit}
     async with engine.connect() as conn:
-        total_result = await conn.execute(text(f'SELECT COUNT(*) FROM materials WHERE {where}'), params)
+        total_result = await conn.execute(text(f'SELECT COUNT(*) FROM materials m LEFT JOIN categories c ON c.id=m.category_id LEFT JOIN brands b ON b.id=m.brand_id WHERE {where}'), params)
         total = total_result.scalar_one()
-        result = await conn.execute(text(f'''SELECT id,material_code,material_name,description,unit,material_group,created_at FROM materials
-          WHERE {where} ORDER BY material_code LIMIT :limit'''), params)
+        result = await conn.execute(text(f'''SELECT m.id,m.material_code,m.material_name,m.description,m.unit,m.material_group,m.category_id,c.name category_name,m.brand_id,b.name brand_name,m.created_at
+          FROM materials m LEFT JOIN categories c ON c.id=m.category_id LEFT JOIN brands b ON b.id=m.brand_id
+          WHERE {where} ORDER BY m.material_code LIMIT :limit'''), params)
         rows = [dict(r) for r in result.mappings().all()]
     return {'query': keyword, 'count': len(rows), 'total': total, 'limit': limit, 'items': rows}
+
+
+@app.post('/api/v1/ai/suggest-name')
+async def suggest_name(payload:NamingSuggestionPayload, _:dict=Depends(current_user)):
+    if not AI_NAMING_ENABLED: raise HTTPException(status_code=503,detail='Tính năng đề xuất tên đang tạm tắt')
+    async with engine.connect() as conn:
+        cr=await conn.execute(text('SELECT id,code,name FROM categories WHERE is_active=TRUE ORDER BY name')); categories=[dict(r) for r in cr.mappings().all()]
+        br=await conn.execute(text('SELECT id,code,name FROM brands WHERE is_active=TRUE ORDER BY name')); brands=[dict(r) for r in br.mappings().all()]
+    source=f"{payload.proposed_name} {payload.description or ''}".lower()
+    category=next((x for x in categories if x['name'].lower() in source),None)
+    brand=next((x for x in brands if x['name'].lower() in source),None)
+    warnings=[]; explanation='Chuẩn hóa theo quy tắc đặt tên nội bộ.'; ai_source='rules'
+    suggested=re.sub(r'\s+',' ',payload.proposed_name).strip(' ,-;')
+    if OPENAI_API_KEY:
+        try:
+            proposal=(await AsyncOpenAI(api_key=OPENAI_API_KEY).responses.parse(
+              model=OPENAI_MODEL,store=False,text_format=NamingProposal,
+              instructions=f"Bạn chuẩn hóa tên vật tư nhà máy may. Quy tắc: {COMPANY_NAMING_RULES} Chỉ chọn mã có trong danh sách, không đủ dữ liệu phải trả null. Categories: {categories}. Brands: {brands}.",
+              input=f"Tên nhập: {payload.proposed_name}\nMô tả/quy cách: {payload.description or ''}"
+            )).output_parsed
+            suggested=proposal.suggested_name.strip();category=next((x for x in categories if x['code']==proposal.category_code),None);brand=next((x for x in brands if x['code']==proposal.brand_code),None)
+            explanation=proposal.explanation;warnings=proposal.warnings;ai_source='openai'
+        except Exception:
+            warnings.append('AI không phản hồi; hệ thống đã dùng quy tắc nội bộ.')
+    else: warnings.append('Chưa cấu hình OPENAI_API_KEY; đang dùng quy tắc nội bộ.')
+    async with engine.connect() as conn:
+        rr=await conn.execute(text('''SELECT id,material_code,material_name,similarity(lower(material_name),lower(:name)) score FROM materials
+          WHERE similarity(lower(material_name),lower(:name))>=0.2 ORDER BY score DESC LIMIT 5'''),{'name':suggested})
+        similar=[dict(r) for r in rr.mappings().all()]
+    if similar:warnings.append(f'Tìm thấy {len(similar)} vật tư gần giống; cần kiểm tra trước khi tạo mã.')
+    return {'suggested_name':suggested,'category_id':category['id'] if category else None,'category_name':category['name'] if category else None,
+      'brand_id':brand['id'] if brand else None,'brand_name':brand['name'] if brand else None,'explanation':explanation,'warnings':warnings,'similar_items':similar,'source':ai_source}
 
 
 @app.post('/api/v1/requests', status_code=201)
@@ -327,10 +399,11 @@ async def create_request(payload: MaterialRequestCreate, user: dict = Depends(cu
         raise HTTPException(status_code=403, detail='Chỉ người lập yêu cầu được tạo yêu cầu mới')
     request_no = f"REQ-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:6].upper()}"
     async with engine.begin() as conn:
-        result = await conn.execute(text('''INSERT INTO material_requests(request_no,requester_id,proposed_name,supplier_material_code,description,unit,material_group,status)
-          VALUES(:no,:uid,:name,:supplier,:description,:unit,:grp,'PENDING_MASTERDATA') RETURNING id'''),
+        result = await conn.execute(text('''INSERT INTO material_requests(request_no,requester_id,proposed_name,supplier_material_code,description,unit,material_group,category_id,brand_id,status)
+          VALUES(:no,:uid,:name,:supplier,:description,:unit,:grp,:category_id,:brand_id,'PENDING_MASTERDATA') RETURNING id'''),
           {'no': request_no, 'uid': user['id'], 'name': payload.proposed_name.strip(), 'supplier': payload.supplier_material_code or None,
-           'description': payload.description or None, 'unit': payload.unit or None, 'grp': payload.material_group or None})
+           'description': payload.description or None, 'unit': payload.unit or None, 'grp': payload.material_group or None,
+           'category_id':payload.category_id,'brand_id':payload.brand_id})
         rid = result.scalar_one()
         await conn.execute(text("INSERT INTO request_history(request_id,actor_id,action,from_status,to_status,note) VALUES(:rid,:uid,'CREATE_REQUEST',NULL,'PENDING_MASTERDATA','Tạo yêu cầu đặt mã hàng')"), {'rid': rid, 'uid': user['id']})
         rr = await conn.execute(text(request_select_sql('WHERE r.id=:id')), {'id': rid})
@@ -368,8 +441,8 @@ async def edit_request(request_id:int,payload:MaterialRequestUpdate,user:dict=De
         if not row: raise HTTPException(status_code=404,detail='Không tìm thấy yêu cầu')
         if row['status']!='RETURNED_TO_REQUESTER': raise HTTPException(status_code=400,detail='Chỉ yêu cầu đã trả lại mới được sửa')
         if row['requester_id']!=user['id'] and user['role']!='ADMIN': raise HTTPException(status_code=403,detail='Chỉ người lập được sửa yêu cầu')
-        await conn.execute(text('''UPDATE material_requests SET proposed_name=:name,supplier_material_code=:supplier,description=:description,unit=:unit,material_group=:grp,updated_at=NOW() WHERE id=:id'''),
-          {'id':request_id,'name':payload.proposed_name.strip(),'supplier':payload.supplier_material_code or None,'description':payload.description or None,'unit':payload.unit or None,'grp':payload.material_group or None})
+        await conn.execute(text('''UPDATE material_requests SET proposed_name=:name,supplier_material_code=:supplier,description=:description,unit=:unit,material_group=:grp,category_id=:category_id,brand_id=:brand_id,updated_at=NOW() WHERE id=:id'''),
+          {'id':request_id,'name':payload.proposed_name.strip(),'supplier':payload.supplier_material_code or None,'description':payload.description or None,'unit':payload.unit or None,'grp':payload.material_group or None,'category_id':payload.category_id,'brand_id':payload.brand_id})
         await conn.execute(text("INSERT INTO request_history(request_id,actor_id,action,from_status,to_status,note) VALUES(:id,:uid,'EDIT_REQUEST','RETURNED_TO_REQUESTER','RETURNED_TO_REQUESTER','Người lập cập nhật lại toàn bộ thông tin yêu cầu')"),{'id':request_id,'uid':user['id']})
         rr=await conn.execute(text(request_select_sql('WHERE r.id=:id')),{'id':request_id}); updated=dict(rr.mappings().one())
     return updated

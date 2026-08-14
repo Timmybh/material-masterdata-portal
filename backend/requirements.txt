@@ -6,3 +6,4 @@ pydantic-settings==2.10.1
 python-jose[cryptography]==3.5.0
 authlib==1.6.1
 httpx==0.28.1
+openai==1.99.9
