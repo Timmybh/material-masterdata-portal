@@ -170,7 +170,7 @@ def full_material_email_html(request: dict, title: str, message: str) -> str:
       <h2>{title}</h2><p>{message}</p>
       <table style="border-collapse:collapse;width:100%;max-width:760px">
       <tr><td><b>Số yêu cầu</b></td><td>{v('request_no')}</td></tr>
-      <tr><td><b>Mã hàng mới</b></td><td>{v('result_material_code')}</td></tr>
+      <tr><td><b>Mã vật tư mới cấp</b></td><td>{v('result_material_code')}</td></tr>
       <tr><td><b>Mã vật tư Nhà cung cấp</b></td><td>{v('supplier_material_code')}</td></tr>
       <tr><td><b>Tên vật tư</b></td><td>{v('proposed_name')}</td></tr>
       <tr><td><b>Mô tả / quy cách</b></td><td>{v('description')}</td></tr>
@@ -233,7 +233,7 @@ async def notify_stage(request: dict, stage: str, actor_note: str | None = None)
         for email in await role_emails('MASTERDATA'):
             await send_and_log_email(rid, email, f"[{request['request_no']}] Có yêu cầu chờ Masterdata duyệt", 'MASTERDATA_PENDING', html)
     elif stage == 'MASTERDATA_APPROVED':
-        html = full_material_email_html(request, 'Masterdata đã duyệt và cấp mã', 'Yêu cầu đã được Masterdata duyệt, mã hàng mới đã được xác lập và chuyển Kế toán phê duyệt cuối.')
+        html = full_material_email_html(request, 'Masterdata đã duyệt', 'Yêu cầu đã được Masterdata duyệt và chuyển Kế toán nhập mã vật tư mới, phê duyệt cuối.')
         await send_and_log_email(rid, requester, f"[{request['request_no']}] Masterdata đã duyệt", 'MASTERDATA_APPROVED', html)
         for email in await role_emails('ACCOUNTING'):
             await send_and_log_email(rid, email, f"[{request['request_no']}] Chờ Kế toán phê duyệt cuối", 'ACCOUNTING_PENDING', html)
@@ -470,11 +470,9 @@ async def transition(request_id:int,payload:WorkflowTransition,user:dict=Depends
 
         elif action=='APPROVE' and state=='PENDING_MASTERDATA':
             if user['role']!='MASTERDATA': raise HTTPException(status_code=403,detail='Chỉ Masterdata được duyệt bước này')
-            if not payload.material_code or not payload.material_code.strip():
-                raise HTTPException(status_code=400, detail='Masterdata cần nhập mã hàng mới trước khi chuyển Kế toán')
             target='PENDING_ACCOUNTING'
-            updates.extend(['masterdata_note=:note','result_material_code=:code'])
-            params['note']=payload.note; params['code']=payload.material_code.strip(); stage_to_notify='MASTERDATA_APPROVED'
+            updates.append('masterdata_note=:note')
+            params['note']=payload.note; stage_to_notify='MASTERDATA_APPROVED'
 
         elif action=='ASSIGN_CODE' and state=='PENDING_CODE_ASSIGNMENT':
             if user['role']!='MASTERDATA': raise HTTPException(status_code=403,detail='Chỉ Masterdata được cấp mã')
@@ -485,9 +483,10 @@ async def transition(request_id:int,payload:WorkflowTransition,user:dict=Depends
 
         elif action=='APPROVE' and state=='PENDING_ACCOUNTING':
             if user['role']!='ACCOUNTING': raise HTTPException(status_code=403,detail='Chỉ Kế toán được duyệt bước này')
-            if not row['result_material_code']:
-                raise HTTPException(status_code=400,detail='Chưa có mã hàng mới. Vui lòng trả lại Masterdata.')
-            target='COMPLETED'; updates.append('accounting_note=:note'); params['note']=payload.note; stage_to_notify='COMPLETED'
+            if not payload.material_code or not payload.material_code.strip():
+                raise HTTPException(status_code=400,detail='Kế toán cần nhập Mã vật tư mới cấp')
+            target='COMPLETED'; updates.extend(['accounting_note=:note','result_material_code=:code'])
+            params['note']=payload.note; params['code']=payload.material_code.strip(); stage_to_notify='COMPLETED'
 
         else:
             raise HTTPException(status_code=400,detail=f'Thao tác {action} không hợp lệ ở trạng thái {state}')
@@ -495,8 +494,8 @@ async def transition(request_id:int,payload:WorkflowTransition,user:dict=Depends
         updates.append('status=:target'); params['target']=target
         await conn.execute(text(f"UPDATE material_requests SET {','.join(updates)} WHERE id=:id"),params)
         history_note = payload.note
-        if state=='PENDING_MASTERDATA' and target=='PENDING_ACCOUNTING' and payload.material_code:
-            history_note = f"{payload.note or ''}\nMã hàng mới: {payload.material_code.strip()}".strip()
+        if state=='PENDING_ACCOUNTING' and target=='COMPLETED' and payload.material_code:
+            history_note = f"{payload.note or ''}\nMã vật tư mới cấp: {payload.material_code.strip()}".strip()
         await conn.execute(text('INSERT INTO request_history(request_id,actor_id,action,from_status,to_status,note) VALUES(:id,:uid,:action,:from,:to,:note)'),
                            {'id':request_id,'uid':user['id'],'action':action,'from':state,'to':target,'note':history_note})
         rr=await conn.execute(text(request_select_sql('WHERE r.id=:id')),{'id':request_id}); updated=dict(rr.mappings().one())
