@@ -62,6 +62,11 @@ class UserRoleUpdate(BaseModel):
 class AdminUserCreate(BaseModel):
     email:EmailStr; username:str=Field(min_length=1,max_length=100,pattern=r"^[A-Za-z0-9._-]+$"); password:str=Field(min_length=8,max_length=256)
     name:str=Field(min_length=2,max_length=255); role:str="USER"; is_active:bool=True
+class CatalogIn(BaseModel):
+    code:str=Field(min_length=1,max_length=100)
+    name:str=Field(min_length=1,max_length=255)
+class CatalogOut(CatalogIn):
+    model_config={"from_attributes":True}
 class RequestOut(RequestFields):
     id:UUID; result_item_code:str|None; accounting_note:str|None=None; status:str; returned_reason:str|None; submitted_at:datetime; created_at:datetime; updated_at:datetime; requester:UserOut
     model_config={"from_attributes":True}

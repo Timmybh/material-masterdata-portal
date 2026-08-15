@@ -1,0 +1,14 @@
+select{font:inherit}
+.form select{border:1px solid #dce2ec;border-radius:9px;padding:11px 12px;outline:0;background:#fff}
+.catalogGrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.catalogPanel{background:#fff;border:1px solid #e5eaf2;border-radius:14px;padding:18px;min-width:0}
+.catalogTools,.catalogActions{display:flex;gap:8px;align-items:center}
+.fileButton{display:inline-flex;border:1px solid #dfe5ef;background:#fff;border-radius:10px;padding:11px 13px;color:#526079;font-weight:700;cursor:pointer}
+.fileButton input{display:none}
+.catalogList{display:grid;gap:7px}
+.catalogRow{display:grid;grid-template-columns:minmax(100px,.7fr) minmax(160px,1.5fr) auto;gap:8px;align-items:center}
+.catalogRow input{border:1px solid #dce2ec;border-radius:9px;padding:10px;min-width:0}
+.catalogHeader{padding:0 4px;color:#667085;font-size:12px}
+.newCatalogRow{padding-top:8px;border-top:1px solid #e5eaf2}
+@media(max-width:1000px){.catalogGrid{grid-template-columns:1fr}}
+@media(max-width:600px){.catalogRow{grid-template-columns:1fr}.catalogHeader{display:none}.catalogActions{justify-content:flex-end}}

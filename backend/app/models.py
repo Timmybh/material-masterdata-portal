@@ -23,6 +23,16 @@ class User(Base):
     is_active: Mapped[bool]=mapped_column(Boolean,default=True,index=True)
     created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=datetime.utcnow)
 
+class MaterialType(Base):
+    __tablename__="material_types"
+    code: Mapped[str]=mapped_column(String(100),primary_key=True)
+    name: Mapped[str]=mapped_column(String(255),unique=True,index=True)
+
+class ItemGroup(Base):
+    __tablename__="item_groups"
+    code: Mapped[str]=mapped_column(String(100),primary_key=True)
+    name: Mapped[str]=mapped_column(String(255),unique=True,index=True)
+
 class Item(Base):
     __tablename__="items"
     id: Mapped[int]=mapped_column(Integer,primary_key=True,autoincrement=False)

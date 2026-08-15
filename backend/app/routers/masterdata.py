@@ -8,6 +8,7 @@ from ..models import MaterialRequest,RequestStatus,Role,User
 from ..notifications import notify
 from ..schemas import MasterdataUpdate,ReasonIn,RequestOut
 from ..workflow import transition
+from .catalogs import resolve_catalog_names
 router=APIRouter(prefix="/api/masterdata",tags=["masterdata"]);allowed=require_roles(Role.MASTERDATA.value)
 def load(db,rid):
     req=db.scalar(select(MaterialRequest).options(joinedload(MaterialRequest.requester)).where(MaterialRequest.id==rid))
@@ -20,7 +21,10 @@ def queue(db:Session=Depends(get_db),_:User=Depends(allowed)):
 def update(rid:UUID,payload:MasterdataUpdate,db:Session=Depends(get_db),_:User=Depends(allowed)):
     req=load(db,rid)
     if req.status not in [RequestStatus.SUBMITTED.value,RequestStatus.ACCOUNTING_RETURNED.value]:raise HTTPException(409,"Trạng thái không cho phép sửa")
-    for k,v in payload.model_dump(exclude_unset=True).items():setattr(req,k,v)
+    data=payload.model_dump(exclude_unset=True)
+    if "item_type_name" in data or "item_group" in data:
+        data["item_type_name"],data["item_group"]=resolve_catalog_names(db,data.get("item_type_name",req.item_type_name),data.get("item_group",req.item_group))
+    for k,v in data.items():setattr(req,k,v)
     db.commit();db.refresh(req);return req
 @router.post("/requests/{rid}/approve",response_model=RequestOut)
 def approve(rid:UUID,db:Session=Depends(get_db),user:User=Depends(allowed)):

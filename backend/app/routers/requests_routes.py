@@ -8,6 +8,7 @@ from ..db import get_db
 from ..models import MaterialRequest,RequestAudit,RequestStatus,User
 from ..notifications import notify
 from ..schemas import RequestCreate,RequestOut,RequestUpdate
+from .catalogs import resolve_catalog_names
 router=APIRouter(prefix="/api/requests",tags=["requests"])
 def load_owned(db,rid,user):
     req=db.scalar(select(MaterialRequest).options(joinedload(MaterialRequest.requester)).where(MaterialRequest.id==rid,MaterialRequest.requester_id==user.id))
@@ -15,7 +16,8 @@ def load_owned(db,rid,user):
     return req
 @router.post("",response_model=RequestOut)
 def create_request(payload:RequestCreate,db:Session=Depends(get_db),user:User=Depends(current_user)):
-    req=MaterialRequest(requester_id=user.id,**payload.model_dump(),status=RequestStatus.SUBMITTED.value)
+    data=payload.model_dump();data["item_type_name"],data["item_group"]=resolve_catalog_names(db,data.get("item_type_name"),data.get("item_group"))
+    req=MaterialRequest(requester_id=user.id,**data,status=RequestStatus.SUBMITTED.value)
     db.add(req);db.flush();db.add(RequestAudit(request_id=req.id,actor_id=user.id,action="SUBMIT",to_status=req.status));db.commit()
     req=load_owned(db,req.id,user);notify(user.email,f"Đã gửi yêu cầu đặt mã: {req.item_name}",req,"Yêu cầu đã chuyển đến Nhân sự phụ trách Masterdata.");return req
 @router.get("/my",response_model=list[RequestOut])
@@ -25,7 +27,8 @@ def my_requests(db:Session=Depends(get_db),user:User=Depends(current_user)):
 def edit_returned(rid:UUID,payload:RequestUpdate,db:Session=Depends(get_db),user:User=Depends(current_user)):
     req=load_owned(db,rid,user)
     if req.status!=RequestStatus.MASTERDATA_RETURNED.value:raise HTTPException(409,"Chỉ được sửa yêu cầu đã trả lại")
-    for k,v in payload.model_dump().items():setattr(req,k,v)
+    data=payload.model_dump();data["item_type_name"],data["item_group"]=resolve_catalog_names(db,data.get("item_type_name"),data.get("item_group"))
+    for k,v in data.items():setattr(req,k,v)
     db.add(RequestAudit(request_id=req.id,actor_id=user.id,action="EDIT_RETURNED",from_status=req.status,to_status=req.status));db.commit();db.refresh(req);return req
 @router.post("/{rid}/resubmit",response_model=RequestOut)
 def resubmit(rid:UUID,db:Session=Depends(get_db),user:User=Depends(current_user)):
