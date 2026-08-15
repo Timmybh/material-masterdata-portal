@@ -4,7 +4,6 @@ from fastapi import APIRouter,Depends,HTTPException,Query
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
-from openpyxl.worksheet.table import Table, TableStyleInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session,joinedload
 from ..auth import require_roles
@@ -14,15 +13,15 @@ from ..notifications import notify
 from ..schemas import CompleteIn,ReasonIn,RequestOut
 from ..workflow import transition
 router=APIRouter(prefix="/api/accounting",tags=["accounting"]);allowed=require_roles(Role.ACCOUNTING.value)
-BRAVO_HEADERS=["Id","Code","ParentId","IsGroup","Name","ItemTypeName","Name2","ItemCustom","IsCustoms","IsItemWithColor","IsItemWithSize","IsItemWithArt","IsItemWithProductCostId","IsItemWithBizDocId_C2","IsItemWithSymmetrical","IsItemWithColorProduct","ParentCode","ItemGroupCode","KindCode","CustomerCode","ProductCostInfo","ProductItemCode","BranchCode","IsMaterial","UnitPrice","IsActive","CreatedBy","CreatedAt","ModifiedBy","ModifiedAt","_SelectKey__yzqey5ai","Ghi chú"]
+BRAVO_HEADERS=["Code","ParentId","IsGroup","Name","ItemTypeName","Name2","ItemCustom","IsCustoms","IsItemWithColor","IsItemWithSize","IsItemWithArt","IsItemWithProductCostId","IsItemWithBizDocId_C2","IsItemWithSymmetrical","IsItemWithColorProduct","ParentCode","ItemGroupCode","KindCode","CustomerCode","ProductCostInfo","ProductItemCode","BranchCode","Ghi chú"]
 
 def bravo_value_row(r):
     purpose_note=(r.notes or r.purpose or "").strip() or None
     return [
-        None,r.result_item_code,None,False,r.item_name,r.item_type_name,r.technical_specs,
+        r.result_item_code,None,False,r.item_name,r.item_type_name,r.technical_specs,
         None,False,r.with_color,r.with_size,r.with_art,False,False,False,False,
         r.parent_code,r.item_group,r.kind_code,r.customer_code,None,None,r.branch_code,
-        r.is_material,None,True,None,r.submitted_at.replace(tzinfo=None) if r.submitted_at else None,None,None,True,purpose_note,
+        purpose_note,
     ]
 
 def build_bravo_workbook(rows):
@@ -32,14 +31,10 @@ def build_bravo_workbook(rows):
     for cell in ws[1]:
         cell.fill=header_fill;cell.font=Font(bold=True);cell.alignment=Alignment(horizontal="center",vertical="center")
     ws.freeze_panes="A2";ws.auto_filter.ref=ws.dimensions
-    widths={"E":36,"F":22,"G":42,"R":20,"AF":45}
+    widths={"A":18,"D":36,"E":22,"F":42,"Q":20,"W":45}
     for column,width in widths.items():ws.column_dimensions[column].width=width
-    for column in ("E","F","G","AF"):
+    for column in ("D","E","F","W"):
         for cell in ws[column]:cell.alignment=Alignment(vertical="top",wrap_text=True)
-    if rows:
-        table=Table(displayName="vB20Item",ref=f"A1:AF{len(rows)+1}")
-        table.tableStyleInfo=TableStyleInfo(name="TableStyleMedium2",showFirstColumn=False,showLastColumn=False,showRowStripes=True,showColumnStripes=False)
-        ws.add_table(table)
     return wb
 
 def load(db,rid):
@@ -50,9 +45,12 @@ def load(db,rid):
 def queue(db:Session=Depends(get_db),_:User=Depends(allowed)):
     return db.scalars(select(MaterialRequest).options(joinedload(MaterialRequest.requester)).where(MaterialRequest.status==RequestStatus.MASTERDATA_APPROVED.value).order_by(MaterialRequest.submitted_at)).all()
 @router.get("/export.xlsx")
-def export_excel(ids:str=Query(default=""),db:Session=Depends(get_db),_:User=Depends(allowed)):
+def export_excel(ids:str=Query(min_length=1),db:Session=Depends(get_db),_:User=Depends(allowed)):
+    try:selected_ids=[UUID(x.strip()) for x in ids.split(",") if x.strip()]
+    except ValueError:raise HTTPException(422,"Danh sách yêu cầu xuất không hợp lệ")
+    if not selected_ids:raise HTTPException(422,"Vui lòng chọn ít nhất một yêu cầu để xuất Excel")
     q=select(MaterialRequest).options(joinedload(MaterialRequest.requester)).where(MaterialRequest.status==RequestStatus.MASTERDATA_APPROVED.value)
-    if ids:q=q.where(MaterialRequest.id.in_([UUID(x.strip()) for x in ids.split(",") if x.strip()]))
+    q=q.where(MaterialRequest.id.in_(selected_ids))
     rows=db.scalars(q.order_by(MaterialRequest.submitted_at)).all();wb=build_bravo_workbook(rows);bio=BytesIO();wb.save(bio);bio.seek(0)
     return StreamingResponse(bio,media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",headers={"Content-Disposition":"attachment; filename=BRAVO_vB20Item.xlsx"})
 @router.post("/requests/{rid}/complete",response_model=RequestOut)
