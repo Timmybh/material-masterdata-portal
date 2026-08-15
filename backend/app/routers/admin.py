@@ -25,6 +25,15 @@ def update_user(uid:UUID,payload:UserRoleUpdate,db:Session=Depends(get_db),actor
     role=payload.role.upper()
     if role not in {x.value for x in Role}:raise HTTPException(422,"Role không hợp lệ")
     if user.id==actor.id and payload.is_active is False:raise HTTPException(409,"Không thể tự khóa tài khoản")
+    if payload.email:
+        email=payload.email.lower().strip()
+        if db.scalar(select(User).where(User.email==email,User.id!=uid)):raise HTTPException(409,"Email đã được sử dụng")
+        user.email=email
+    if payload.username:
+        username=payload.username.lower().strip()
+        if db.scalar(select(User).where(User.username==username,User.id!=uid)):raise HTTPException(409,"Tên tài khoản đã được sử dụng")
+        user.username=username
+    if payload.name:user.name=payload.name.strip()
     user.role=role
     if payload.is_active is not None:user.is_active=payload.is_active
     if payload.password:user.password_hash=hash_password(payload.password)
