@@ -1,6 +1,6 @@
 @keyframes attentionPulse{0%,100%{opacity:.72;box-shadow:0 0 0 0 #f5c45100}50%{opacity:1;box-shadow:0 0 0 4px #f5c45122}}
 .aiNotice{padding:12px 14px;border:1px solid #f5c451;background:#fff8df;color:#7a5100;border-radius:10px;margin-bottom:15px;font-weight:700;font-size:13px;animation:attentionPulse 2.4s ease-in-out infinite}
-.toolGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.toolGrid{display:grid;grid-template-columns:1fr;gap:10px}.suggestBtn{display:none}
 .aiBtn{width:100%;border:1px solid #9ab5ef;background:#eff4ff;color:#174aaf;border-radius:9px;padding:11px 14px;font-weight:700;margin:10px 0}
 .aiBtn:disabled{opacity:.6;cursor:wait}
 .aiResults,.nameSuggestion{border:1px solid #d9e3f8;background:#f8faff;border-radius:11px;padding:12px;margin:0 0 14px}
