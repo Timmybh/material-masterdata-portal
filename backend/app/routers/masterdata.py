@@ -30,7 +30,7 @@ def update(rid:UUID,payload:MasterdataUpdate,db:Session=Depends(get_db),_:User=D
 def approve(rid:UUID,db:Session=Depends(get_db),user:User=Depends(allowed)):
     req=load(db,rid)
     if req.status not in [RequestStatus.SUBMITTED.value,RequestStatus.ACCOUNTING_RETURNED.value]:raise HTTPException(409,"Trạng thái không thể duyệt")
-    if not req.item_group or not req.classification:raise HTTPException(422,"Cần chọn Nhóm hàng và Phân loại trước khi duyệt")
+    if not req.item_group or not req.item_type_name:raise HTTPException(422,"Cần chọn Loại / Phân loại và Nhóm hàng trước khi duyệt")
     req=transition(db,req,user,"MASTERDATA_APPROVE",RequestStatus.MASTERDATA_APPROVED.value);notify(req.requester.email,f"Masterdata đã duyệt: {req.item_name}",req,"Yêu cầu đã chuyển đến Kế toán.");return req
 @router.post("/requests/{rid}/return",response_model=RequestOut)
 def return_to_user(rid:UUID,payload:ReasonIn,db:Session=Depends(get_db),user:User=Depends(allowed)):
