@@ -9,7 +9,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: masterdata-backend:1.5.1
+        image: masterdata-backend:1.6.0
         imagePullPolicy: IfNotPresent
         envFrom: [{secretRef: {name: masterdata-secrets}}]
         ports: [{containerPort: 8000}]
@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: masterdata-frontend:1.5.1
+        image: masterdata-frontend:1.6.0
         imagePullPolicy: IfNotPresent
         envFrom: [{secretRef: {name: masterdata-secrets}}]
         env:

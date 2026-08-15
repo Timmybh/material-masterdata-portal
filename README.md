@@ -1,4 +1,13 @@
-# Material Masterdata Portal V1.5.1
+# Material Masterdata Portal V1.6
+
+## Thay đổi V1.6
+
+- Dò mặt hàng trùng bằng PostgreSQL tại màn hình Người lập, Masterdata và Kế toán; so sánh tên, tính chất/quy cách và mục đích sử dụng, không gọi AI.
+- AI chỉ đề xuất **tên mặt hàng** chuẩn dựa trên thông tin người dùng đã nhập; không tự thêm chủng loại hoặc nhãn hiệu.
+- Thêm trường chỉ đọc `Mã vật tư mới cấp` ở cuối yêu cầu.
+- Kế toán nhập `Ghi chú Kế toán` và `Mã mới`; khi duyệt, mã được cập nhật vào yêu cầu của người lập.
+- Cảnh báo kiểm tra trùng nhấp nháy nhẹ để thu hút sự chú ý.
+- OpenAI API key chỉ cấu hình trong backend qua `OPENAI_API_KEY`, tuyệt đối không nhập vào giao diện hoặc commit lên Git.
 
 Ứng dụng tra cứu danh mục vật tư BRAVO và workflow yêu cầu tạo mã mới cho DOVITEC.
 

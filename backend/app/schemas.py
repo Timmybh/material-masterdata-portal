@@ -31,10 +31,29 @@ class MasterdataUpdate(BaseModel):
     item_type_name:str|None=None; parent_code:str|None=None; item_group:str|None=None; classification:str|None=None; kind_code:str|None=None
     customer_code:str|None=None; branch_code:str|None=None; is_material:bool|None=None; with_color:bool|None=None; with_size:bool|None=None; with_art:bool|None=None
 class ReasonIn(BaseModel): reason:str=Field(min_length=3)
-class CompleteIn(BaseModel): item_code:str=Field(min_length=1,max_length=100)
+class CompleteIn(BaseModel):
+    item_code:str=Field(min_length=1,max_length=100)
+    note:str|None=Field(default=None,max_length=2000)
+class DuplicateCheckIn(BaseModel):
+    item_name:str=Field(min_length=2,max_length=500)
+    specification:str|None=Field(default=None,max_length=4000)
+    purpose:str|None=Field(default=None,max_length=4000)
+    limit:int=Field(default=8,ge=1,le=20)
+class DuplicateCandidateOut(BaseModel):
+    code:str; name:str; similarity:float; reason:str|None=None; duplicate_risk:str="POSSIBLE"
+class DuplicateCheckOut(BaseModel):
+    ai_used:bool; summary:str; candidates:list[DuplicateCandidateOut]
+class NameSuggestionIn(BaseModel):
+    item_name:str=Field(min_length=2,max_length=500)
+    specification:str|None=Field(default=None,max_length=4000)
+    technical_specs:str|None=Field(default=None,max_length=4000)
+    purpose:str|None=Field(default=None,max_length=4000)
+class NameSuggestionOut(BaseModel):
+    suggested_name:str=Field(min_length=2,max_length=500)
+    explanation:str
 class UserRoleUpdate(BaseModel): role:str; is_active:bool|None=None
 class AdminUserCreate(BaseModel):
     email:EmailStr; name:str=Field(min_length=2,max_length=255); role:str="USER"; is_active:bool=True
 class RequestOut(RequestFields):
-    id:UUID; result_item_code:str|None; status:str; returned_reason:str|None; submitted_at:datetime; created_at:datetime; updated_at:datetime; requester:UserOut
+    id:UUID; result_item_code:str|None; accounting_note:str|None=None; status:str; returned_reason:str|None; submitted_at:datetime; created_at:datetime; updated_at:datetime; requester:UserOut
     model_config={"from_attributes":True}

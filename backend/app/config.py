@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     smtp_from: str = "noreply@example.local"
     smtp_starttls: bool = True
     frontend_url: str = "http://localhost:5173"
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4.1-mini"
+    openai_timeout_seconds: int = 30
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -32,7 +32,9 @@ def export_excel(ids:str=Query(default=""),db:Session=Depends(get_db),_:User=Dep
 def complete(rid:UUID,payload:CompleteIn,db:Session=Depends(get_db),user:User=Depends(allowed)):
     req=load(db,rid)
     if req.status!=RequestStatus.MASTERDATA_APPROVED.value:raise HTTPException(409,"Yêu cầu chưa ở trạng thái Kế toán xử lý")
-    req.result_item_code=payload.item_code.strip();req=transition(db,req,user,"ACCOUNTING_COMPLETE",RequestStatus.COMPLETED.value,f"Mã mới: {req.result_item_code}")
+    req.result_item_code=payload.item_code.strip();req.accounting_note=(payload.note or "").strip() or None
+    audit_note=f"Mã mới: {req.result_item_code}"+(f" | Ghi chú: {req.accounting_note}" if req.accounting_note else "")
+    req=transition(db,req,user,"ACCOUNTING_COMPLETE",RequestStatus.COMPLETED.value,audit_note)
     notify(req.requester.email,f"Đã có mã vật tư: {req.item_name}",req,f"Mã vật tư mới: {req.result_item_code}");return req
 @router.post("/requests/{rid}/return",response_model=RequestOut)
 def return_to_masterdata(rid:UUID,payload:ReasonIn,db:Session=Depends(get_db),user:User=Depends(allowed)):

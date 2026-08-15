@@ -75,6 +75,7 @@ class MaterialRequest(Base):
     branch_code: Mapped[str|None]=mapped_column(String(100),nullable=True); is_material: Mapped[bool]=mapped_column(Boolean,default=False)
     with_color: Mapped[bool]=mapped_column(Boolean,default=False); with_size: Mapped[bool]=mapped_column(Boolean,default=False); with_art: Mapped[bool]=mapped_column(Boolean,default=False)
     result_item_code: Mapped[str|None]=mapped_column(String(100),nullable=True)
+    accounting_note: Mapped[str|None]=mapped_column(Text,nullable=True)
     status: Mapped[str]=mapped_column(String(40),default=RequestStatus.SUBMITTED.value,index=True)
     returned_reason: Mapped[str|None]=mapped_column(Text,nullable=True)
     submitted_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=datetime.utcnow)
