@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from .config import get_settings
 
@@ -47,6 +47,9 @@ def init_db():
         for name, sql_type in item_columns.items(): conn.execute(text(f"ALTER TABLE items ADD COLUMN IF NOT EXISTS {name} {sql_type}"))
         for name, sql_type in request_columns.items(): conn.execute(text(f"ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS {name} {sql_type}"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100)"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_username_lower ON users (LOWER(username)) WHERE username IS NOT NULL"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_items_code ON items(code)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_items_fts ON items USING GIN (to_tsvector('simple', search_text))"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_items_trgm ON items USING GIN (search_text gin_trgm_ops)"))
@@ -56,3 +59,17 @@ def init_db():
         missing=expected-actual
         if missing:
             raise RuntimeError(f"Migration items chưa đầy đủ, thiếu cột: {', '.join(sorted(missing))}")
+    if settings.bootstrap_admin_password and settings.bootstrap_admin_emails:
+        from .models import Role, User
+        from .passwords import hash_password
+        admin_email=next(iter(settings.email_set(settings.bootstrap_admin_emails)))
+        with SessionLocal() as db:
+            admin=db.scalar(select(User).where(User.email==admin_email))
+            if not admin:
+                admin=User(email=admin_email,name="System Administrator",role=Role.ADMIN.value,is_active=True)
+                db.add(admin)
+            admin.username=settings.bootstrap_admin_username.strip().lower()
+            admin.role=Role.ADMIN.value;admin.is_active=True
+            if not admin.password_hash:
+                admin.password_hash=hash_password(settings.bootstrap_admin_password)
+            db.commit()

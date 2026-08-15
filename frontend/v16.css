@@ -13,3 +13,4 @@
 .emptyAi{font-size:12px;color:#667085;padding:8px 0}.form .resultCode input{background:#f2f4f7;color:#475467;font-weight:700}
 .completeFields{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:14px;border-top:1px solid #edf0f5}.completeFields label{display:grid;gap:6px;font-size:11px;font-weight:700;color:#526079}.completeFields input,.completeFields textarea{border:1px solid #dce2ec;border-radius:9px;padding:11px 12px;outline:0;background:#fff}.completeFields textarea{min-height:64px;resize:vertical}
 @media(max-width:800px){.toolGrid,.completeFields{grid-template-columns:1fr}}
+.userRow{display:grid;grid-template-columns:minmax(190px,1fr) 145px auto minmax(180px,240px) 80px;gap:10px}.userRow select,.userRow>[data-password]{border:1px solid #dce2ec;border-radius:9px;padding:9px 10px;min-width:0}.userRow>[data-save]{padding:9px 12px}@media(max-width:1000px){.userRow{grid-template-columns:1fr 1fr}.userRow>div{grid-column:1/-1}}

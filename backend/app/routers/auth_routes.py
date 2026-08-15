@@ -1,32 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
-from ..auth import upsert_google_user, create_token, current_user, role_for_email
-from ..config import get_settings
+
+from ..auth import create_token, current_user
 from ..db import get_db
 from ..models import User
-from ..schemas import GoogleAuthIn, AuthOut, UserOut, DevAuthIn
+from ..passwords import verify_password
+from ..schemas import AuthOut, PasswordLoginIn, UserOut
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-settings = get_settings()
 
-@router.post("/google", response_model=AuthOut)
-def google_login(payload: GoogleAuthIn, db: Session = Depends(get_db)):
-    user = upsert_google_user(db, payload.credential)
+
+@router.post("/login", response_model=AuthOut)
+def password_login(payload: PasswordLoginIn, db: Session = Depends(get_db)):
+    identifier = payload.identifier.strip().lower()
+    user = db.scalar(select(User).where(or_(func.lower(User.email) == identifier, func.lower(User.username) == identifier)))
+    if not user or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(401, "Tài khoản hoặc mật khẩu không đúng")
     return AuthOut(access_token=create_token(user), user=user)
 
-@router.post("/dev", response_model=AuthOut)
-def dev_login(payload: DevAuthIn, db: Session = Depends(get_db)):
-    if not settings.dev_auth_enabled:
-        raise HTTPException(404, "Dev auth disabled")
-    user = db.scalar(select(User).where(User.email == payload.email.lower()))
-    if not user:
-        user = User(email=payload.email.lower(), name=payload.name, role=payload.role.upper(), is_active=True)
-        db.add(user)
-    else:
-        user.role = payload.role.upper(); user.name = payload.name
-    db.commit(); db.refresh(user)
-    return AuthOut(access_token=create_token(user), user=user)
 
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(current_user)):

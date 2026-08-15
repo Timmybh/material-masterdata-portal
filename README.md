@@ -8,6 +8,8 @@
 - Kế toán nhập `Ghi chú Kế toán` và `Mã mới`; khi duyệt, mã được cập nhật vào yêu cầu của người lập.
 - Cảnh báo kiểm tra trùng nhấp nháy nhẹ để thu hút sự chú ý.
 - OpenAI API key chỉ cấu hình trong backend qua `OPENAI_API_KEY`, tuyệt đối không nhập vào giao diện hoặc commit lên Git.
+- Đăng nhập nội bộ bằng email hoặc tên tài khoản và mật khẩu. Mật khẩu được băm PBKDF2-SHA256, không lưu dạng rõ.
+- Trước lần chạy đầu, đặt `BOOTSTRAP_ADMIN_EMAILS`, `BOOTSTRAP_ADMIN_USERNAME` và `BOOTSTRAP_ADMIN_PASSWORD` trong `.env`; phải đổi mật khẩu mẫu.
 
 Ứng dụng tra cứu danh mục vật tư BRAVO và workflow yêu cầu tạo mã mới cho DOVITEC.
 

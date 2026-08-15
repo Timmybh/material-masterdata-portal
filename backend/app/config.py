@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     cors_origins: str = "http://localhost:5173,http://localhost:8080"
     bootstrap_admin_emails: str = ""
+    bootstrap_admin_username: str = "admin"
+    bootstrap_admin_password: str = ""
     masterdata_emails: str = ""
     accounting_emails: str = ""
     dev_auth_enabled: bool = False

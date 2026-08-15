@@ -5,8 +5,11 @@ from pydantic import BaseModel, EmailStr, Field
 
 class GoogleAuthIn(BaseModel): credential: str
 class DevAuthIn(BaseModel): email: EmailStr; name: str="Dev User"; role: str="USER"
+class PasswordLoginIn(BaseModel):
+    identifier:str=Field(min_length=1,max_length=320)
+    password:str=Field(min_length=1,max_length=256)
 class UserOut(BaseModel):
-    id: UUID; email: str; name: str; picture: str|None=None; role: str; is_active: bool=True
+    id: UUID; email: str; username:str|None=None; name: str; picture: str|None=None; role: str; is_active: bool=True
     model_config={"from_attributes":True}
 class AuthOut(BaseModel): access_token: str; token_type: str="bearer"; user: UserOut
 class ItemOut(BaseModel):
@@ -51,9 +54,10 @@ class NameSuggestionIn(BaseModel):
 class NameSuggestionOut(BaseModel):
     suggested_name:str=Field(min_length=2,max_length=500)
     explanation:str
-class UserRoleUpdate(BaseModel): role:str; is_active:bool|None=None
+class UserRoleUpdate(BaseModel): role:str; is_active:bool|None=None; password:str|None=Field(default=None,min_length=8,max_length=256)
 class AdminUserCreate(BaseModel):
-    email:EmailStr; name:str=Field(min_length=2,max_length=255); role:str="USER"; is_active:bool=True
+    email:EmailStr; username:str=Field(min_length=1,max_length=100,pattern=r"^[A-Za-z0-9._-]+$"); password:str=Field(min_length=8,max_length=256)
+    name:str=Field(min_length=2,max_length=255); role:str="USER"; is_active:bool=True
 class RequestOut(RequestFields):
     id:UUID; result_item_code:str|None; accounting_note:str|None=None; status:str; returned_reason:str|None; submitted_at:datetime; created_at:datetime; updated_at:datetime; requester:UserOut
     model_config={"from_attributes":True}
