@@ -4,9 +4,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from ..auth import require_roles
 from ..db import get_db
-from ..models import Role,User
+from ..models import Role,User,UserAudit
 from ..passwords import hash_password
-from ..schemas import AdminUserCreate,UserOut,UserRoleUpdate
+from ..schemas import AdminPasswordReset,AdminUserCreate,UserOut,UserRoleUpdate
 router=APIRouter(prefix="/api/admin",tags=["admin"]);allowed=require_roles(Role.ADMIN.value)
 @router.get("/users",response_model=list[UserOut])
 def users(db:Session=Depends(get_db),_:User=Depends(allowed)):return db.scalars(select(User).order_by(User.created_at.desc())).all()
@@ -36,5 +36,14 @@ def update_user(uid:UUID,payload:UserRoleUpdate,db:Session=Depends(get_db),actor
     if payload.name:user.name=payload.name.strip()
     user.role=role
     if payload.is_active is not None:user.is_active=payload.is_active
-    if payload.password:user.password_hash=hash_password(payload.password)
     db.commit();db.refresh(user);return user
+
+@router.post("/users/{uid}/reset-password",status_code=204)
+def reset_password(uid:UUID,payload:AdminPasswordReset,db:Session=Depends(get_db),actor:User=Depends(allowed)):
+    user=db.get(User,uid)
+    if not user:raise HTTPException(404,"Không tìm thấy người dùng")
+    if payload.password!=payload.password_confirmation:raise HTTPException(422,"Mật khẩu xác nhận không khớp")
+    user.password_hash=hash_password(payload.password)
+    user.token_version+=1
+    db.add(UserAudit(user_id=user.id,actor_id=actor.id,action="PASSWORD_RESET"))
+    db.commit()

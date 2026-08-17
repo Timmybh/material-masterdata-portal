@@ -58,10 +58,13 @@ class UserRoleUpdate(BaseModel):
     name:str|None=Field(default=None,min_length=2,max_length=255)
     email:EmailStr|None=None
     username:str|None=Field(default=None,min_length=1,max_length=100,pattern=r"^[A-Za-z0-9._-]+$")
-    role:str; is_active:bool|None=None; password:str|None=Field(default=None,min_length=8,max_length=256)
+    role:str; is_active:bool|None=None
 class AdminUserCreate(BaseModel):
     email:EmailStr; username:str=Field(min_length=1,max_length=100,pattern=r"^[A-Za-z0-9._-]+$"); password:str=Field(min_length=8,max_length=256)
     name:str=Field(min_length=2,max_length=255); role:str="USER"; is_active:bool=True
+class AdminPasswordReset(BaseModel):
+    password:str=Field(min_length=8,max_length=256)
+    password_confirmation:str=Field(min_length=8,max_length=256)
 class CatalogIn(BaseModel):
     code:str=Field(min_length=1,max_length=100)
     name:str=Field(min_length=1,max_length=255)
