@@ -17,7 +17,7 @@ def create_token(user: User) -> str:
     if not user.is_active:
         raise HTTPException(403, "Tài khoản đã bị khóa")
     exp = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_exp_minutes)
-    return jwt.encode({"sub": str(user.id), "role": user.role, "exp": exp}, settings.jwt_secret, algorithm="HS256")
+    return jwt.encode({"sub": str(user.id), "role": user.role, "ver": user.token_version, "exp": exp}, settings.jwt_secret, algorithm="HS256")
 
 
 def current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)) -> User:
@@ -31,6 +31,8 @@ def current_user(credentials: HTTPAuthorizationCredentials = Depends(security), 
     user = db.get(User, uid)
     if not user:
         raise HTTPException(401, "Người dùng không tồn tại")
+    if payload.get("ver", 0) != user.token_version:
+        raise HTTPException(401, "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại")
     if not user.is_active:
         raise HTTPException(403, "Tài khoản đã bị khóa")
     return user
