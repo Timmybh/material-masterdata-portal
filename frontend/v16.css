@@ -21,3 +21,14 @@
 .itemVisibleFields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px;margin-top:10px;padding:10px 12px;border:1px solid #e3e9f4;border-radius:10px;background:#f8faff;color:#526079;font-size:12px;line-height:1.45}
 .itemVisibleFields span{min-width:0;overflow-wrap:anywhere}.itemVisibleFields b{color:#253858}
 @media(max-width:700px){.itemVisibleFields{grid-template-columns:1fr}}
+
+/* Bố cục thẻ kết quả: không để nội dung dài đè hoặc tràn sang cột khác. */
+.itemCard{grid-template-columns:minmax(150px,220px) minmax(0,1fr) 50px;align-items:start;overflow:hidden}
+.itemMain{min-width:0}.itemMain h4{overflow-wrap:anywhere}
+.codeBlock{min-width:0;padding-top:2px}.codeLabel{display:block;margin-bottom:5px;color:#667085;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.code{font-size:16px;line-height:1.35;overflow-wrap:anywhere;word-break:break-word}
+.meta{min-width:0}.meta span{max-width:100%;overflow-wrap:anywhere}
+.itemVisibleFields{width:100%;max-width:100%;box-sizing:border-box}
+.match{min-width:0}
+@media(max-width:800px){.itemCard{grid-template-columns:minmax(100px,32%) minmax(0,1fr);align-items:start}.itemCard .match{display:none}}
+@media(max-width:560px){.itemCard{grid-template-columns:1fr}.codeBlock{padding-bottom:10px;border-bottom:1px solid #edf0f5}}
