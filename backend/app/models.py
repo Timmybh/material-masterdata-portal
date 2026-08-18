@@ -87,6 +87,8 @@ class MaterialRequest(Base):
     __tablename__="material_requests"
     id: Mapped[uuid.UUID]=mapped_column(primary_key=True,default=uuid.uuid4)
     requester_id: Mapped[uuid.UUID]=mapped_column(ForeignKey("users.id"),index=True)
+    requester_name: Mapped[str]=mapped_column(String(255),default="")
+    department: Mapped[str]=mapped_column(String(255),default="")
     item_name: Mapped[str]=mapped_column(String(500)); unit: Mapped[str]=mapped_column(String(100))
     specification: Mapped[str|None]=mapped_column(Text,nullable=True); technical_specs: Mapped[str|None]=mapped_column(Text,nullable=True)
     purpose: Mapped[str|None]=mapped_column(Text,nullable=True); notes: Mapped[str|None]=mapped_column(Text,nullable=True)
