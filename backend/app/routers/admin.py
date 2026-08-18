@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from ..auth import require_roles
 from ..db import get_db
-from ..models import Role,User,UserAudit
+from ..models import MaterialRequest,RequestAudit,Role,User,UserAudit
 from ..passwords import hash_password
 from ..schemas import AdminPasswordReset,AdminUserCreate,UserOut,UserRoleUpdate
 router=APIRouter(prefix="/api/admin",tags=["admin"]);allowed=require_roles(Role.ADMIN.value)
@@ -47,3 +47,22 @@ def reset_password(uid:UUID,payload:AdminPasswordReset,db:Session=Depends(get_db
     user.token_version+=1
     db.add(UserAudit(user_id=user.id,actor_id=actor.id,action="PASSWORD_RESET"))
     db.commit()
+
+
+@router.delete("/users/{uid}")
+def delete_user(uid:UUID,db:Session=Depends(get_db),actor:User=Depends(allowed)):
+    user=db.get(User,uid)
+    if not user:raise HTTPException(404,"Không tìm thấy người dùng")
+    if user.id==actor.id:raise HTTPException(409,"Không thể tự xóa tài khoản đang đăng nhập")
+    has_history=bool(
+        db.scalar(select(MaterialRequest.id).where(MaterialRequest.requester_id==uid).limit(1))
+        or db.scalar(select(RequestAudit.id).where(RequestAudit.actor_id==uid).limit(1))
+        or db.scalar(select(UserAudit.id).where((UserAudit.user_id==uid)|(UserAudit.actor_id==uid)).limit(1))
+    )
+    if has_history:
+        user.is_active=False;user.token_version+=1
+        db.add(UserAudit(user_id=user.id,actor_id=actor.id,action="DELETE_DEACTIVATED"))
+        db.commit()
+        return {"deleted":False,"deactivated":True,"message":"Tài khoản có lịch sử nghiệp vụ nên đã được khóa để bảo toàn dữ liệu."}
+    db.delete(user);db.commit()
+    return {"deleted":True,"deactivated":False,"message":"Đã xóa người dùng."}
