@@ -22,6 +22,7 @@ class ItemOut(BaseModel):
     model_config={"from_attributes":True}
 class ItemSearchOut(BaseModel): items:list[ItemOut]; total:int; limit:int; query:str
 class RequestFields(BaseModel):
+    requester_name:str=Field(min_length=2,max_length=255); department:str=Field(min_length=1,max_length=255)
     item_name:str=Field(min_length=2,max_length=500); unit:str=Field(min_length=1,max_length=100)
     specification:str|None=None; technical_specs:str|None=None; purpose:str|None=None; notes:str|None=None
     item_type_name:str|None=None; parent_code:str|None=None; item_group:str|None=None; classification:str|None=None
@@ -30,6 +31,7 @@ class RequestFields(BaseModel):
 class RequestCreate(RequestFields): pass
 class RequestUpdate(RequestFields): pass
 class MasterdataUpdate(BaseModel):
+    requester_name:str|None=Field(default=None,min_length=2,max_length=255); department:str|None=Field(default=None,min_length=1,max_length=255)
     item_name:str|None=None; unit:str|None=None; specification:str|None=None; technical_specs:str|None=None; purpose:str|None=None; notes:str|None=None
     item_type_name:str|None=None; parent_code:str|None=None; item_group:str|None=None; classification:str|None=None; kind_code:str|None=None
     customer_code:str|None=None; branch_code:str|None=None; is_material:bool|None=None; with_color:bool|None=None; with_size:bool|None=None; with_art:bool|None=None
