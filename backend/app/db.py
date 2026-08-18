@@ -39,6 +39,7 @@ def init_db():
             "source_modified_by": "INTEGER", "source_select_key": "BOOLEAN", "extra_data": "TEXT"
         }
         request_columns = {
+            "requester_name":"VARCHAR(255) NOT NULL DEFAULT ''", "department":"VARCHAR(255) NOT NULL DEFAULT ''",
             "item_type_name":"VARCHAR(100)", "parent_code":"VARCHAR(100)", "kind_code":"VARCHAR(100)",
             "customer_code":"VARCHAR(100)", "branch_code":"VARCHAR(100)", "is_material":"BOOLEAN NOT NULL DEFAULT FALSE",
             "with_color":"BOOLEAN NOT NULL DEFAULT FALSE", "with_size":"BOOLEAN NOT NULL DEFAULT FALSE", "with_art":"BOOLEAN NOT NULL DEFAULT FALSE",
