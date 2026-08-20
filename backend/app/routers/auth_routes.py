@@ -15,7 +15,11 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 def password_login(payload: PasswordLoginIn, db: Session = Depends(get_db)):
     identifier = payload.identifier.strip().lower()
     user = db.scalar(select(User).where(or_(func.lower(User.email) == identifier, func.lower(User.username) == identifier)))
-    if not user or not verify_password(payload.password, user.password_hash):
+    password_matches = bool(user) and (
+        (user.password_hash is None and payload.password == "")
+        or verify_password(payload.password, user.password_hash)
+    )
+    if not user or not user.is_active or not password_matches:
         raise HTTPException(401, "Tài khoản hoặc mật khẩu không đúng")
     return AuthOut(access_token=create_token(user), user=user)
 

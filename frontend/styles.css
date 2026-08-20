@@ -4,3 +4,4 @@
 
 nav button{white-space:nowrap}
 @media(max-width:800px){header{height:auto;min-height:72px;padding:10px 13px 0;gap:10px;flex-wrap:wrap}.brand{min-width:0;flex:1}.user{margin-left:auto}nav{order:3;flex:0 0 calc(100% + 26px);margin:0 -13px;overflow-x:auto;padding:0 13px 8px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}nav button{font-size:13px;flex:0 0 auto;padding:10px 12px}}
+.expiryWarning{grid-column:1/-1;background:#fff3cd;border:1px solid #f2cc60;border-left:4px solid #e09b00;color:#7a4c00;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:14px;line-height:1.45}.historyRow{flex-wrap:wrap}.historyRow .expiryWarning{flex:0 0 100%}

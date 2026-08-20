@@ -1,13 +1,19 @@
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+
+def validate_optional_password(value: str) -> str:
+    if value and len(value) < 8:
+        raise ValueError("Mật khẩu phải có ít nhất 8 ký tự hoặc để trống")
+    return value
 
 class GoogleAuthIn(BaseModel): credential: str
 class DevAuthIn(BaseModel): email: EmailStr; name: str="Dev User"; role: str="USER"
 class PasswordLoginIn(BaseModel):
     identifier:str=Field(min_length=1,max_length=320)
-    password:str=Field(min_length=1,max_length=256)
+    password:str=Field(default="",max_length=256)
 class UserOut(BaseModel):
     id: UUID; email: str; username:str|None=None; name: str; picture: str|None=None; role: str; is_active: bool=True
     model_config={"from_attributes":True}
@@ -62,11 +68,13 @@ class UserRoleUpdate(BaseModel):
     username:str|None=Field(default=None,min_length=1,max_length=100,pattern=r"^[A-Za-z0-9._-]+$")
     role:str; is_active:bool|None=None
 class AdminUserCreate(BaseModel):
-    email:EmailStr; username:str=Field(min_length=1,max_length=100,pattern=r"^[A-Za-z0-9._-]+$"); password:str=Field(min_length=8,max_length=256)
+    email:EmailStr; username:str=Field(min_length=1,max_length=100,pattern=r"^[A-Za-z0-9._-]+$"); password:str=Field(default="",max_length=256)
     name:str=Field(min_length=2,max_length=255); role:str="USER"; is_active:bool=True
+    _validate_password=field_validator("password")(validate_optional_password)
 class AdminPasswordReset(BaseModel):
-    password:str=Field(min_length=8,max_length=256)
-    password_confirmation:str=Field(min_length=8,max_length=256)
+    password:str=Field(default="",max_length=256)
+    password_confirmation:str=Field(default="",max_length=256)
+    _validate_passwords=field_validator("password","password_confirmation")(validate_optional_password)
 class CatalogIn(BaseModel):
     code:str=Field(min_length=1,max_length=100)
     name:str=Field(min_length=1,max_length=255)

@@ -16,7 +16,7 @@ def create_user(payload:AdminUserCreate,db:Session=Depends(get_db),_:User=Depend
     if role not in {x.value for x in Role}:raise HTTPException(422,"Role không hợp lệ")
     if db.scalar(select(User).where(User.email==email)):raise HTTPException(409,"Email đã tồn tại")
     if db.scalar(select(User).where(User.username==username)):raise HTTPException(409,"Tên tài khoản đã tồn tại")
-    user=User(email=email,username=username,password_hash=hash_password(payload.password),name=payload.name.strip(),role=role,is_active=payload.is_active)
+    user=User(email=email,username=username,password_hash=hash_password(payload.password) if payload.password else None,name=payload.name.strip(),role=role,is_active=payload.is_active)
     db.add(user);db.commit();db.refresh(user);return user
 @router.patch("/users/{uid}",response_model=UserOut)
 def update_user(uid:UUID,payload:UserRoleUpdate,db:Session=Depends(get_db),actor:User=Depends(allowed)):
@@ -43,7 +43,7 @@ def reset_password(uid:UUID,payload:AdminPasswordReset,db:Session=Depends(get_db
     user=db.get(User,uid)
     if not user:raise HTTPException(404,"Không tìm thấy người dùng")
     if payload.password!=payload.password_confirmation:raise HTTPException(422,"Mật khẩu xác nhận không khớp")
-    user.password_hash=hash_password(payload.password)
+    user.password_hash=hash_password(payload.password) if payload.password else None
     user.token_version+=1
     db.add(UserAudit(user_id=user.id,actor_id=actor.id,action="PASSWORD_RESET"))
     db.commit()
