@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     jwt_secret: str = "CHANGE_ME_IN_PRODUCTION"
     jwt_exp_minutes: int = 480
     google_client_id: str = ""
-    cors_origins: str = "http://localhost:5173,http://localhost:8080"
+    cors_origins: str = "http://localhost:5173,http://localhost:8088"
     bootstrap_admin_emails: str = ""
     bootstrap_admin_username: str = "admin"
     bootstrap_admin_password: str = ""
