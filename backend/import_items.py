@@ -34,8 +34,6 @@ def source_rows(path):
 def run(path:str):
     init_db();raw_headers,rows,source=source_rows(path)
     headers=[h if h not in (None,"") else f"__unnamed_{i}" for i,h in enumerate(raw_headers)];pos={h:i for i,h in enumerate(headers)}
-    missing={"Id","Code","Name","ItemTypeName"}-set(pos)
-    if missing:raise ValueError(f"Thiếu cột bắt buộc: {', '.join(sorted(missing))}")
     prepared=[];skipped=0
     try:
       for row in rows:
@@ -57,9 +55,6 @@ def run(path:str):
     finally:
       source.close()
     if not prepared:raise ValueError("File không có dòng mặt hàng hợp lệ; giữ nguyên dữ liệu hiện tại")
-    ids=[row["id"] for row in prepared];codes=[row["code"] for row in prepared]
-    if len(ids)!=len(set(ids)):raise ValueError("File có Id trùng; giữ nguyên dữ liệu hiện tại")
-    if len(codes)!=len(set(codes)):raise ValueError("File có Code trùng; giữ nguyên dữ liệu hiện tại")
     with SessionLocal.begin() as db:
       db.execute(delete(Item))
       for start in range(0,len(prepared),1000):
