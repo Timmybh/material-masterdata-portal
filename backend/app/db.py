@@ -40,13 +40,15 @@ def init_db():
         }
         request_columns = {
             "requester_name":"VARCHAR(255) NOT NULL DEFAULT ''", "department":"VARCHAR(255) NOT NULL DEFAULT ''",
-            "item_type_name":"VARCHAR(100)", "parent_code":"VARCHAR(100)", "kind_code":"VARCHAR(100)",
+            "item_type_name":"VARCHAR(100)", "parent_code":"VARCHAR(100)", "kind_code":"VARCHAR(100)", "brand":"VARCHAR(255)",
             "customer_code":"VARCHAR(100)", "branch_code":"VARCHAR(100)", "is_material":"BOOLEAN NOT NULL DEFAULT FALSE",
             "with_color":"BOOLEAN NOT NULL DEFAULT FALSE", "with_size":"BOOLEAN NOT NULL DEFAULT FALSE", "with_art":"BOOLEAN NOT NULL DEFAULT FALSE",
-            "submitted_at":"TIMESTAMPTZ NOT NULL DEFAULT NOW()", "accounting_note":"TEXT"
+            "submitted_at":"TIMESTAMPTZ NOT NULL DEFAULT NOW()", "accounting_note":"TEXT", "code_issued_at":"TIMESTAMPTZ"
         }
         for name, sql_type in item_columns.items(): conn.execute(text(f"ALTER TABLE items ADD COLUMN IF NOT EXISTS {name} {sql_type}"))
         for name, sql_type in request_columns.items(): conn.execute(text(f"ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS {name} {sql_type}"))
+        conn.execute(text("UPDATE material_requests SET code_issued_at = updated_at WHERE status = 'COMPLETED' AND code_issued_at IS NULL"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_material_requests_code_issued_at ON material_requests(code_issued_at DESC)"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100)"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT"))

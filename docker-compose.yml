@@ -33,6 +33,7 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:12345678@postgres:5432/masterdata
+      AUTO_IMPORT_FILE_PATH: /data/Danh muc vat tu.xlsx
     depends_on:
       db-init:
         condition: service_completed_successfully

@@ -36,7 +36,19 @@ docker compose up -d --build
 
 Truy cập `http://localhost:8080`. PostgreSQL mặc định: `localhost:5432`, database `masterdata`, user `postgres`, password `12345678`.
 
-Service `db-init` tự tạo/nâng cấp schema và upsert dữ liệu từ `data/Danh muc vat tu.xlsx`. File dữ liệu lớn không lưu trong Git để tránh hỏng file nhị phân khi clone; hãy copy file Excel gốc vào thư mục `data` trước khi chạy reset. Script sẽ kiểm tra chữ ký XLSX trước khi xóa database cũ.
+Service `db-init` tự tạo/nâng cấp schema và thay thế toàn bộ danh mục từ `data/Danh muc vat tu.xlsx`. File dữ liệu lớn không lưu trong Git để tránh hỏng file nhị phân khi clone; hãy copy file Excel gốc vào thư mục `data` trước khi chạy reset. Script sẽ kiểm tra chữ ký XLSX trước khi thay thế dữ liệu.
+
+Backend cũng tự động thay thế 100% danh mục từ file Excel mỗi ngày lúc 19:00 theo giờ Việt Nam. Hệ thống kiểm tra toàn bộ file trước, sau đó xóa và nhập lại bảng `items` trong cùng một transaction; nếu import lỗi, dữ liệu cũ được rollback và giữ nguyên. Cấu hình trong `.env`:
+
+```dotenv
+AUTO_IMPORT_ENABLED=true
+AUTO_IMPORT_FILE_PATH=/data/Danh muc vat tu.xlsx
+AUTO_IMPORT_HOUR=19
+AUTO_IMPORT_MINUTE=0
+AUTO_IMPORT_TIMEZONE=Asia/Ho_Chi_Minh
+```
+
+Khi chạy Docker, đặt file ở `data/Danh muc vat tu.xlsx`; thư mục `data` đã được mount chỉ đọc vào `/data` trong container backend.
 
 ```powershell
 ./scripts/init-db-and-data.ps1
@@ -53,7 +65,7 @@ Service `db-init` tự tạo/nâng cấp schema và upsert dữ liệu từ `dat
 
 ## Nâng cấp từ database cũ
 
-Backend chạy migration idempotent khi khởi động, sau đó `db-init` upsert lại toàn bộ danh mục. Dữ liệu yêu cầu và người dùng hiện có được giữ nguyên.
+Backend chạy migration idempotent khi khởi động, sau đó `db-init` thay thế toàn bộ danh mục. Dữ liệu yêu cầu và người dùng hiện có được giữ nguyên.
 
 ### Làm mới hoàn toàn database (khuyến nghị cho V1.5.1)
 

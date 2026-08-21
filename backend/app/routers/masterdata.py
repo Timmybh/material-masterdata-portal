@@ -17,6 +17,9 @@ def load(db,rid):
 @router.get("/requests",response_model=list[RequestOut])
 def queue(db:Session=Depends(get_db),_:User=Depends(allowed)):
     return db.scalars(select(MaterialRequest).options(joinedload(MaterialRequest.requester)).where(MaterialRequest.status.in_([RequestStatus.SUBMITTED.value,RequestStatus.ACCOUNTING_RETURNED.value])).order_by(MaterialRequest.submitted_at)).all()
+@router.get("/requests/all",response_model=list[RequestOut])
+def all_requests(db:Session=Depends(get_db),_:User=Depends(allowed)):
+    return db.scalars(select(MaterialRequest).options(joinedload(MaterialRequest.requester)).order_by(MaterialRequest.code_issued_at.desc().nullslast(),MaterialRequest.updated_at.desc())).all()
 @router.patch("/requests/{rid}",response_model=RequestOut)
 def update(rid:UUID,payload:MasterdataUpdate,db:Session=Depends(get_db),_:User=Depends(allowed)):
     req=load(db,rid)

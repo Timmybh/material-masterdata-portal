@@ -29,7 +29,7 @@ class ItemOut(BaseModel):
 class ItemSearchOut(BaseModel): items:list[ItemOut]; total:int; limit:int; query:str
 class RequestFields(BaseModel):
     requester_name:str=Field(min_length=2,max_length=255); department:str=Field(min_length=1,max_length=255)
-    item_name:str=Field(min_length=2,max_length=500); unit:str=Field(min_length=1,max_length=100)
+    item_name:str=Field(min_length=2,max_length=500); unit:str=Field(min_length=1,max_length=100); brand:str|None=Field(default=None,max_length=255)
     specification:str|None=None; technical_specs:str|None=None; purpose:str|None=None; notes:str|None=None
     item_type_name:str|None=None; parent_code:str|None=None; item_group:str|None=None; classification:str|None=None
     kind_code:str|None=None; customer_code:str|None=None; branch_code:str|None=None
@@ -38,7 +38,7 @@ class RequestCreate(RequestFields): pass
 class RequestUpdate(RequestFields): pass
 class MasterdataUpdate(BaseModel):
     requester_name:str|None=Field(default=None,min_length=2,max_length=255); department:str|None=Field(default=None,min_length=1,max_length=255)
-    item_name:str|None=None; unit:str|None=None; specification:str|None=None; technical_specs:str|None=None; purpose:str|None=None; notes:str|None=None
+    item_name:str|None=None; unit:str|None=None; brand:str|None=Field(default=None,max_length=255); specification:str|None=None; technical_specs:str|None=None; purpose:str|None=None; notes:str|None=None
     item_type_name:str|None=None; parent_code:str|None=None; item_group:str|None=None; classification:str|None=None; kind_code:str|None=None
     customer_code:str|None=None; branch_code:str|None=None; is_material:bool|None=None; with_color:bool|None=None; with_size:bool|None=None; with_art:bool|None=None
 class ReasonIn(BaseModel): reason:str=Field(min_length=3)
@@ -81,5 +81,5 @@ class CatalogIn(BaseModel):
 class CatalogOut(CatalogIn):
     model_config={"from_attributes":True}
 class RequestOut(RequestFields):
-    id:UUID; result_item_code:str|None; accounting_note:str|None=None; status:str; returned_reason:str|None; submitted_at:datetime; created_at:datetime; updated_at:datetime; requester:UserOut
+    id:UUID; result_item_code:str|None; accounting_note:str|None=None; status:str; returned_reason:str|None; submitted_at:datetime; code_issued_at:datetime|None=None; created_at:datetime; updated_at:datetime; requester:UserOut
     model_config={"from_attributes":True}

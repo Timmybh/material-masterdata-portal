@@ -3,6 +3,7 @@ from datetime import datetime,timedelta
 from decimal import Decimal,InvalidOperation
 from pathlib import Path
 from openpyxl import load_workbook
+from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert
 from unidecode import unidecode
 from app.db import SessionLocal,init_db
@@ -35,8 +36,8 @@ def run(path:str):
     headers=[h if h not in (None,"") else f"__unnamed_{i}" for i,h in enumerate(raw_headers)];pos={h:i for i,h in enumerate(headers)}
     missing={"Id","Code","Name","ItemTypeName"}-set(pos)
     if missing:raise ValueError(f"Thiếu cột bắt buộc: {', '.join(sorted(missing))}")
-    batch=[];total=skipped=0
-    with SessionLocal() as db:
+    prepared=[];skipped=0
+    try:
       for row in rows:
         data={dest:clean(row[pos[src]]) for src,dest in COLUMNS.items() if src in pos}
         if data.get("id") is None or data.get("code") is None or data.get("name") is None:skipped+=1;continue
@@ -52,11 +53,20 @@ def run(path:str):
         extras={str(h):row[i] for i,h in enumerate(headers) if h not in COLUMNS and h and clean(row[i]) is not None}
         data["extra_data"]=json.dumps(extras,ensure_ascii=False,default=str) if extras else None
         data["search_text"]=norm(*(data.get(k) for k in ("new_code","old_code","code","name","name2","item_custom","item_type_name","parent_code","item_group_code","kind_code","customer_code","product_cost_info","branch_code")))
-        batch.append(data)
-        if len(batch)>=1000:
-            stmt=insert(Item).values(batch);db.execute(stmt.on_conflict_do_update(index_elements=[Item.id],set_={k:getattr(stmt.excluded,k) for k in batch[0] if k!="id"}));db.commit();total+=len(batch);print(f"Imported {total}");batch=[]
-      if batch:
-        stmt=insert(Item).values(batch);db.execute(stmt.on_conflict_do_update(index_elements=[Item.id],set_={k:getattr(stmt.excluded,k) for k in batch[0] if k!="id"}));db.commit();total+=len(batch)
-    source.close();print(f"Done: {total} items; skipped: {skipped}")
+        prepared.append(data)
+    finally:
+      source.close()
+    if not prepared:raise ValueError("File không có dòng mặt hàng hợp lệ; giữ nguyên dữ liệu hiện tại")
+    ids=[row["id"] for row in prepared];codes=[row["code"] for row in prepared]
+    if len(ids)!=len(set(ids)):raise ValueError("File có Id trùng; giữ nguyên dữ liệu hiện tại")
+    if len(codes)!=len(set(codes)):raise ValueError("File có Code trùng; giữ nguyên dữ liệu hiện tại")
+    with SessionLocal.begin() as db:
+      db.execute(delete(Item))
+      for start in range(0,len(prepared),1000):
+        batch=prepared[start:start+1000]
+        db.execute(insert(Item).values(batch))
+        print(f"Imported {min(start+len(batch),len(prepared))}")
+    total=len(prepared);print(f"Done: {total} items; skipped: {skipped}")
+    return {"imported":total,"skipped":skipped}
 if __name__=="__main__":
     p=argparse.ArgumentParser();p.add_argument("xlsx");run(p.parse_args().xlsx)

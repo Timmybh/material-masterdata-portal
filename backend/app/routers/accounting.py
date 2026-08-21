@@ -1,3 +1,4 @@
+from datetime import datetime,timezone
 from io import BytesIO
 from uuid import UUID
 from fastapi import APIRouter,Depends,HTTPException,Query
@@ -44,6 +45,9 @@ def load(db,rid):
 @router.get("/requests",response_model=list[RequestOut])
 def queue(db:Session=Depends(get_db),_:User=Depends(allowed)):
     return db.scalars(select(MaterialRequest).options(joinedload(MaterialRequest.requester)).where(MaterialRequest.status==RequestStatus.MASTERDATA_APPROVED.value).order_by(MaterialRequest.submitted_at)).all()
+@router.get("/requests/all",response_model=list[RequestOut])
+def all_requests(db:Session=Depends(get_db),_:User=Depends(allowed)):
+    return db.scalars(select(MaterialRequest).options(joinedload(MaterialRequest.requester)).order_by(MaterialRequest.code_issued_at.desc().nullslast(),MaterialRequest.updated_at.desc())).all()
 @router.get("/export.xlsx")
 def export_excel(ids:str=Query(min_length=1),db:Session=Depends(get_db),_:User=Depends(allowed)):
     try:selected_ids=[UUID(x.strip()) for x in ids.split(",") if x.strip()]
@@ -58,6 +62,7 @@ def complete(rid:UUID,payload:CompleteIn,db:Session=Depends(get_db),user:User=De
     req=load(db,rid)
     if req.status!=RequestStatus.MASTERDATA_APPROVED.value:raise HTTPException(409,"Yêu cầu chưa ở trạng thái Kế toán xử lý")
     req.result_item_code=payload.item_code.strip();req.accounting_note=(payload.note or "").strip() or None
+    req.code_issued_at=datetime.now(timezone.utc)
     audit_note=f"Mã mới: {req.result_item_code}"+(f" | Ghi chú: {req.accounting_note}" if req.accounting_note else "")
     req=transition(db,req,user,"ACCOUNTING_COMPLETE",RequestStatus.COMPLETED.value,audit_note)
     notify(req.requester.email,f"Đã có mã vật tư: {req.item_name}",req,f"Mã vật tư mới: {req.result_item_code}");return req

@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1-mini"
     openai_timeout_seconds: int = 30
+    auto_import_enabled: bool = True
+    auto_import_file_path: str = "/data/Danh muc vat tu.xlsx"
+    auto_import_hour: int = 19
+    auto_import_minute: int = 0
+    auto_import_timezone: str = "Asia/Ho_Chi_Minh"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
