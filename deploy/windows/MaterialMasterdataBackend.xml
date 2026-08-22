@@ -1,0 +1,17 @@
+<service>
+  <id>MaterialMasterdataBackend</id>
+  <name>Material Masterdata Backend</name>
+  <description>FastAPI backend for Material Masterdata Portal</description>
+  <executable>%BASE%\python\Scripts\python.exe</executable>
+  <arguments>-m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1</arguments>
+  <workingdirectory>%BASE%\backend</workingdirectory>
+  <env name="PYTHONPATH" value="%BASE%\backend" />
+  <env name="ENVIRONMENT" value="production" />
+  <logpath>%BASE%\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+  <onfailure action="restart" delay="10 sec" />
+  <stoptimeout>30 sec</stoptimeout>
+</service>

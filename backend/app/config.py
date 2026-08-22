@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "Material Masterdata Portal"
     environment: str = "development"
-    database_url: str = "postgresql+psycopg://postgres:12345678@postgres:5432/masterdata"
+    database_url: str = "mssql+pyodbc://sa:ChangeMe@localhost/masterdata?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
     jwt_secret: str = "CHANGE_ME_IN_PRODUCTION"
     jwt_exp_minutes: int = 480
     google_client_id: str = ""

@@ -1,8 +1,11 @@
 # Material Masterdata Portal V1.6
 
+> Bản triển khai IIS + SQL Server được phát triển trên nhánh `feature/iis-sqlserver`.
+> Hướng dẫn nằm tại `deploy/windows/README.md`. Bản Docker/PostgreSQL ổn định vẫn được giữ trên nhánh `main` trong thời gian chuyển đổi.
+
 ## Thay đổi V1.6
 
-- Dò mặt hàng trùng bằng PostgreSQL tại màn hình Người lập, Masterdata và Kế toán; so sánh tên, tính chất/quy cách và mục đích sử dụng, không gọi AI.
+- Dò mặt hàng trùng bằng SQL Server Full-Text Search tại màn hình Người lập, Masterdata và Kế toán; so sánh tên, tính chất/quy cách và mục đích sử dụng, không gọi AI.
 - AI chỉ đề xuất **tên mặt hàng** chuẩn dựa trên thông tin người dùng đã nhập; không tự thêm chủng loại hoặc nhãn hiệu.
 - Thêm trường chỉ đọc `Mã vật tư mới cấp` ở cuối yêu cầu.
 - Kế toán nhập `Ghi chú Kế toán` và `Mã mới`; khi duyệt, mã được cập nhật vào yêu cầu của người lập.

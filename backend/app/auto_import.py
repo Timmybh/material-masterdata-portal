@@ -16,7 +16,7 @@ from .db import engine
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
-IMPORT_LOCK_ID = 19000001
+IMPORT_LOCK_NAME = "material-masterdata-auto-import"
 
 
 def _timezone() -> ZoneInfo:
@@ -51,8 +51,12 @@ def import_configured_file() -> None:
         return
 
     with engine.connect() as connection:
-        locked = connection.scalar(text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": IMPORT_LOCK_ID})
-        if not locked:
+        lock_result = connection.scalar(
+            text("DECLARE @result int; EXEC @result = sp_getapplock @Resource=:lock_name, "
+                 "@LockMode='Exclusive', @LockOwner='Session', @LockTimeout=0; SELECT @result"),
+            {"lock_name": IMPORT_LOCK_NAME},
+        )
+        if lock_result is None or int(lock_result) < 0:
             logger.info("Bỏ qua auto import vì một instance khác đang thực hiện")
             return
         try:
@@ -69,7 +73,10 @@ def import_configured_file() -> None:
         except Exception:
             logger.exception("Auto import thất bại từ file %s", source)
         finally:
-            connection.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": IMPORT_LOCK_ID})
+            connection.execute(
+                text("EXEC sp_releaseapplock @Resource=:lock_name, @LockOwner='Session'"),
+                {"lock_name": IMPORT_LOCK_NAME},
+            )
 
 
 async def auto_import_worker() -> None:

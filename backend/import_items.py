@@ -3,8 +3,7 @@ from datetime import datetime,timedelta
 from decimal import Decimal,InvalidOperation
 from pathlib import Path
 from openpyxl import load_workbook
-from sqlalchemy import delete
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import delete, insert
 from unidecode import unidecode
 from app.db import SessionLocal,init_db
 from app.models import Item
