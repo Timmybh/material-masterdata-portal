@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from .config import get_settings
 
@@ -80,12 +80,19 @@ def init_db():
         from .models import Role, User
         from .passwords import hash_password
         admin_email=next(iter(settings.email_set(settings.bootstrap_admin_emails)))
+        desired_username=settings.bootstrap_admin_username.strip().lower()
         with SessionLocal() as db:
             admin=db.scalar(select(User).where(User.email==admin_email))
+            username_owner=None
+            if desired_username:
+                username_owner=db.scalar(select(User).where(func.lower(User.username)==desired_username))
             if not admin:
                 admin=User(email=admin_email,name="System Administrator",role=Role.ADMIN.value,is_active=True)
                 db.add(admin)
-            admin.username=settings.bootstrap_admin_username.strip().lower()
+            # Never steal a username from an existing migrated account. This can
+            # happen when BOOTSTRAP_ADMIN_EMAILS differs between environments.
+            if desired_username and (not username_owner or username_owner.id==admin.id):
+                admin.username=desired_username
             admin.role=Role.ADMIN.value;admin.is_active=True
             if not admin.password_hash:
                 admin.password_hash=hash_password(settings.bootstrap_admin_password)
