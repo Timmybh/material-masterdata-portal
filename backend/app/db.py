@@ -63,6 +63,19 @@ def init_db():
         missing=expected-actual
         if missing:
             raise RuntimeError(f"Migration items chưa đầy đủ, thiếu cột: {', '.join(sorted(missing))}")
+    from .models import AutoImportConfig
+    with SessionLocal() as db:
+        config=db.get(AutoImportConfig,1)
+        if not config:
+            db.add(AutoImportConfig(
+                id=1,
+                enabled=settings.auto_import_enabled,
+                file_path=settings.auto_import_file_path,
+                hour=settings.auto_import_hour,
+                minute=settings.auto_import_minute,
+                timezone=settings.auto_import_timezone,
+            ))
+            db.commit()
     if settings.bootstrap_admin_password and settings.bootstrap_admin_emails:
         from .models import Role, User
         from .passwords import hash_password

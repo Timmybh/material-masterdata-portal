@@ -1,13 +1,64 @@
+import asyncio
+import shutil
+import tempfile
+from pathlib import Path
 from uuid import UUID
-from fastapi import APIRouter,Depends,HTTPException
+from fastapi import APIRouter,Depends,File,HTTPException,UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from ..auth import require_roles
 from ..db import get_db
-from ..models import MaterialRequest,RequestAudit,Role,User,UserAudit
+from ..auto_import import ImportAlreadyRunningError,execute_import,get_import_config
+from ..models import AutoImportConfig,MaterialRequest,RequestAudit,Role,User,UserAudit
 from ..passwords import hash_password
-from ..schemas import AdminPasswordReset,AdminUserCreate,UserOut,UserRoleUpdate
+from ..schemas import AdminPasswordReset,AdminUserCreate,AutoImportConfigOut,AutoImportConfigUpdate,UserOut,UserRoleUpdate
 router=APIRouter(prefix="/api/admin",tags=["admin"]);allowed=require_roles(Role.ADMIN.value)
+
+def import_config_out(config:AutoImportConfig):
+    return {
+        "enabled":config.enabled,"file_path":config.file_path,"hour":config.hour,"minute":config.minute,
+        "timezone":config.timezone,"is_running":config.is_running,"scheduler_active":config.enabled,
+        "last_trigger":config.last_trigger,"last_started_at":config.last_started_at,"last_completed_at":config.last_completed_at,
+        "last_status":config.last_status,"last_imported":config.last_imported,"last_skipped":config.last_skipped,
+        "last_error":config.last_error,"updated_at":config.updated_at,
+    }
+
+@router.get("/item-import/config",response_model=AutoImportConfigOut)
+def read_item_import_config(db:Session=Depends(get_db),_:User=Depends(allowed)):
+    return import_config_out(get_import_config(db))
+
+@router.put("/item-import/config",response_model=AutoImportConfigOut)
+def update_item_import_config(payload:AutoImportConfigUpdate,db:Session=Depends(get_db),_:User=Depends(allowed)):
+    file_path=payload.file_path.strip()
+    if Path(file_path).suffix.lower() not in {".xlsx",".csv"}:
+        raise HTTPException(422,"Đường dẫn phải trỏ đến file .xlsx hoặc .csv")
+    config=get_import_config(db)
+    config.enabled=payload.enabled;config.file_path=file_path;config.hour=payload.hour;config.minute=payload.minute
+    db.commit();db.refresh(config)
+    return import_config_out(config)
+
+@router.post("/item-import/upload")
+async def import_items_from_upload(file:UploadFile=File(...),_:User=Depends(allowed)):
+    suffix=Path(file.filename or "").suffix.lower()
+    if suffix not in {".xlsx",".csv"}:
+        raise HTTPException(422,"Chỉ hỗ trợ file .xlsx hoặc .csv")
+    temp_path=None
+    try:
+        with tempfile.NamedTemporaryFile(prefix="admin-item-import-",suffix=suffix,delete=False) as target:
+            temp_path=Path(target.name)
+            shutil.copyfileobj(file.file,target)
+        result=await asyncio.to_thread(execute_import,str(temp_path),"MANUAL")
+        return {"message":"Import danh mục vật tư thành công",**result}
+    except ImportAlreadyRunningError as exc:
+        raise HTTPException(409,str(exc)) from exc
+    except (ValueError,FileNotFoundError) as exc:
+        raise HTTPException(422,str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(422,f"Import thất bại: {exc}") from exc
+    finally:
+        await file.close()
+        if temp_path:
+            temp_path.unlink(missing_ok=True)
 @router.get("/users",response_model=list[UserOut])
 def users(db:Session=Depends(get_db),_:User=Depends(allowed)):return db.scalars(select(User).order_by(User.created_at.desc())).all()
 @router.post("/users",response_model=UserOut,status_code=201)

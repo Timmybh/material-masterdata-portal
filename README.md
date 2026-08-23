@@ -1,4 +1,12 @@
-# Material Masterdata Portal V1.6
+# Material Masterdata Portal V1.6.8
+
+## Thay đổi V1.6.8
+
+- Admin có thể tải file `.xlsx`/`.csv` lên và import toàn bộ Danh mục vật tư ngay trên giao diện.
+- Cấu hình job import tự động được lưu trong PostgreSQL: Kích hoạt/Dừng, giờ chạy và đường dẫn file.
+- Màn hình Admin hiển thị job đang hoạt động, không hoạt động hoặc đang import; tự cập nhật trạng thái mỗi 5 giây.
+- Lưu kết quả lần chạy gần nhất: nguồn chạy thủ công/tự động, thời gian, số dòng nhập/bỏ qua và lỗi gần nhất.
+- Import thủ công và tự động dùng chung advisory lock và transaction; không thể chạy chồng nhau, lỗi sẽ rollback dữ liệu.
 
 ## Thay đổi V1.6
 
@@ -38,7 +46,7 @@ Truy cập `http://localhost:8088`. PostgreSQL mặc định: `localhost:5432`, 
 
 Service `db-init` tự tạo/nâng cấp schema và thay thế toàn bộ danh mục từ `data/Danh muc vat tu.xlsx`. File dữ liệu lớn không lưu trong Git để tránh hỏng file nhị phân khi clone; hãy copy file Excel gốc vào thư mục `data` trước khi chạy reset. Script sẽ kiểm tra chữ ký XLSX trước khi thay thế dữ liệu.
 
-Backend cũng tự động thay thế 100% danh mục từ file Excel mỗi ngày lúc 19:00 theo giờ Việt Nam. Hệ thống kiểm tra toàn bộ file trước, sau đó xóa và nhập lại bảng `items` trong cùng một transaction; nếu import lỗi, dữ liệu cũ được rollback và giữ nguyên. Cấu hình trong `.env`:
+Backend cũng tự động thay thế 100% danh mục từ file Excel mỗi ngày lúc 19:00 theo giờ Việt Nam. Hệ thống kiểm tra toàn bộ file trước, sau đó xóa và nhập lại bảng `items` trong cùng một transaction; nếu import lỗi, dữ liệu cũ được rollback và giữ nguyên. Các giá trị trong `.env` là mặc định cho lần khởi tạo đầu tiên; sau đó Admin cấu hình trực tiếp trên giao diện:
 
 ```dotenv
 AUTO_IMPORT_ENABLED=true
@@ -62,6 +70,8 @@ Khi chạy Docker, đặt file ở `data/Danh muc vat tu.xlsx`; thư mục `data
 - `PATCH /api/requests/{id}` và `POST /api/requests/{id}/resubmit`: sửa/gửi lại yêu cầu bị trả.
 - `/api/masterdata/*`, `/api/accounting/*`: duyệt và trả kết quả.
 - `/api/admin/users`: quản lý tài khoản và role.
+- `GET/PUT /api/admin/item-import/config`: xem và lưu cấu hình job import.
+- `POST /api/admin/item-import/upload`: import thủ công Danh mục vật tư.
 
 ## Nâng cấp từ database cũ
 

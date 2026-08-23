@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
 
-app=FastAPI(title=settings.app_name, version="1.6.6", lifespan=lifespan)
+app=FastAPI(title=settings.app_name, version="1.6.8", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in settings.cors_origins.split(",") if x.strip()], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(auth_routes.router); app.include_router(items.router); app.include_router(requests_routes.router); app.include_router(masterdata.router); app.include_router(accounting.router)
 app.include_router(admin.router)

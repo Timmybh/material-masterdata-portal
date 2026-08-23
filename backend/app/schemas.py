@@ -80,6 +80,23 @@ class CatalogIn(BaseModel):
     name:str=Field(min_length=1,max_length=255)
 class CatalogOut(CatalogIn):
     model_config={"from_attributes":True}
+class AutoImportConfigUpdate(BaseModel):
+    enabled:bool
+    file_path:str=Field(min_length=1,max_length=2000)
+    hour:int=Field(ge=0,le=23)
+    minute:int=Field(ge=0,le=59)
+class AutoImportConfigOut(AutoImportConfigUpdate):
+    timezone:str
+    is_running:bool
+    scheduler_active:bool
+    last_trigger:str|None=None
+    last_started_at:datetime|None=None
+    last_completed_at:datetime|None=None
+    last_status:str|None=None
+    last_imported:int|None=None
+    last_skipped:int|None=None
+    last_error:str|None=None
+    updated_at:datetime
 class RequestOut(RequestFields):
     id:UUID; result_item_code:str|None; accounting_note:str|None=None; status:str; returned_reason:str|None; submitted_at:datetime; code_issued_at:datetime|None=None; created_at:datetime; updated_at:datetime; requester:UserOut
     model_config={"from_attributes":True}

@@ -83,6 +83,24 @@ class Item(Base):
     extra_data: Mapped[str|None]=mapped_column(Text,nullable=True)
     __table_args__=(Index("ix_items_parent_group","parent_id","is_group"),Index("ix_items_type_group","item_type_name","item_group_code"))
 
+class AutoImportConfig(Base):
+    __tablename__="auto_import_config"
+    id: Mapped[int]=mapped_column(Integer,primary_key=True,default=1)
+    enabled: Mapped[bool]=mapped_column(Boolean,default=True)
+    file_path: Mapped[str]=mapped_column(Text,default="/data/Danh muc vat tu.xlsx")
+    hour: Mapped[int]=mapped_column(Integer,default=19)
+    minute: Mapped[int]=mapped_column(Integer,default=0)
+    timezone: Mapped[str]=mapped_column(String(100),default="Asia/Ho_Chi_Minh")
+    is_running: Mapped[bool]=mapped_column(Boolean,default=False)
+    last_trigger: Mapped[str|None]=mapped_column(String(20),nullable=True)
+    last_started_at: Mapped[datetime|None]=mapped_column(DateTime(timezone=True),nullable=True)
+    last_completed_at: Mapped[datetime|None]=mapped_column(DateTime(timezone=True),nullable=True)
+    last_status: Mapped[str|None]=mapped_column(String(20),nullable=True)
+    last_imported: Mapped[int|None]=mapped_column(Integer,nullable=True)
+    last_skipped: Mapped[int|None]=mapped_column(Integer,nullable=True)
+    last_error: Mapped[str|None]=mapped_column(Text,nullable=True)
+    updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=datetime.utcnow,onupdate=datetime.utcnow)
+
 class MaterialRequest(Base):
     __tablename__="material_requests"
     id: Mapped[uuid.UUID]=mapped_column(primary_key=True,default=uuid.uuid4)
