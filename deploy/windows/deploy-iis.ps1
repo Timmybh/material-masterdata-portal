@@ -119,7 +119,8 @@ cd /d "$backendRoot"
 "@
 Set-Content -Path $launcher -Encoding ASCII -Value $launcherText
 
-$taskAction = New-ScheduledTaskAction -Execute $env:ComSpec -Argument "/d /c `"`"$launcher`"`""
+$taskArguments = '/d /c ""{0}""' -f $launcher
+$taskAction = New-ScheduledTaskAction -Execute $env:ComSpec -Argument $taskArguments
 $taskTrigger = New-ScheduledTaskTrigger -AtStartup
 $taskSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
 $taskPrincipal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
