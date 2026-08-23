@@ -1,5 +1,16 @@
 # Material Masterdata Portal V1.6.8
 
+## Kiến trúc triển khai hiện tại
+
+Production được triển khai trực tiếp trên Windows Server, không dùng Docker:
+
+- IIS phục vụ frontend và reverse proxy API tại cổng `8088`.
+- FastAPI/Uvicorn chạy bằng Windows Service.
+- PostgreSQL 16 cài native, giữ PostgreSQL Full-Text Search và trigram search.
+- Hướng dẫn và script: [`deploy/windows/README.md`](deploy/windows/README.md).
+
+Các file Docker/Kubernetes cũ chỉ được giữ lại để tham khảo lịch sử, không thuộc luồng triển khai production hiện tại.
+
 ## Thay đổi V1.6.8
 
 - Admin có thể tải file `.xlsx`/`.csv` lên và import toàn bộ Danh mục vật tư ngay trên giao diện.
@@ -35,7 +46,9 @@
 - Quản trị tài khoản, role và trạng thái hoạt động.
 - V1.5.2 khôi phục chức năng Admin tạo người dùng mới và mở rộng Full Text Search theo từng từ khóa, không dấu, mã cũ/mới và chuỗi gần đúng.
 
-## Chạy bằng Docker Desktop
+## Triển khai Docker cũ (chỉ lưu tham khảo)
+
+Phần này không còn thuộc phương án triển khai hiện tại. Production sử dụng hướng dẫn IIS + PostgreSQL native ở đầu tài liệu.
 
 ```powershell
 Copy-Item .env.example .env
@@ -94,7 +107,7 @@ docker compose exec postgres psql -U postgres -d masterdata -c "SELECT COUNT(*) 
 docker compose exec postgres psql -U postgres -d masterdata -c "SELECT COUNT(*) AS material_count FROM items;"
 ```
 
-## Kubernetes
+## Kubernetes cũ (chỉ lưu tham khảo)
 
 ```powershell
 Copy-Item ./k8s/secret.example.yaml ./k8s/secret.yaml
