@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    throw "Hãy mở PowerShell bằng Run as Administrator."
+    throw "Run PowerShell as Administrator."
 }
 
 $sourceRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
@@ -24,13 +24,13 @@ Import-Module WebAdministration
 $appcmd = Join-Path $env:windir "System32\inetsrv\appcmd.exe"
 $modules = (& $appcmd list modules | Out-String)
 if ($modules -notmatch "RewriteModule") {
-    throw "IIS URL Rewrite chưa được cài. Cài URL Rewrite 2.1 rồi chạy lại script."
+    throw "IIS URL Rewrite is not installed. Install URL Rewrite 2.1 and run this script again."
 }
 try {
     Get-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST" -Filter "system.webServer/proxy" -Name "enabled" | Out-Null
 }
 catch {
-    throw "IIS Application Request Routing (ARR) chưa được cài. Cài ARR rồi chạy lại script."
+    throw "IIS Application Request Routing (ARR) is not installed. Install ARR and run this script again."
 }
 
 $existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
@@ -60,17 +60,17 @@ if (-not (Test-Path (Join-Path $venvRoot "Scripts\python.exe"))) {
 $python = Join-Path $venvRoot "Scripts\python.exe"
 & $python -m pip install --upgrade pip
 & $python -m pip install -r (Join-Path $backendRoot "requirements.txt")
-if ($LASTEXITCODE -ne 0) { throw "Cài Python dependencies thất bại" }
+if ($LASTEXITCODE -ne 0) { throw "Failed to install Python dependencies." }
 
 $envFile = Join-Path $backendRoot ".env"
 if (-not (Test-Path $envFile)) {
     Copy-Item (Join-Path $sourceRoot ".env.windows.example") $envFile
-    Write-Warning "Đã tạo $envFile. Hãy sửa DATABASE_URL, JWT_SECRET và mật khẩu rồi chạy lại script."
+    Write-Warning "Created $envFile. Update DATABASE_URL, JWT_SECRET and passwords, then run this script again."
     return
 }
 $envText = Get-Content $envFile -Raw
 if ($envText -match "CHANGE_ME|CHANGE_TO_A_LONG_RANDOM_SECRET") {
-    throw "File $envFile vẫn còn mật khẩu/secret mẫu. Hãy cập nhật trước khi cài service."
+    throw "File $envFile still contains sample passwords or secrets. Update it before installing the service."
 }
 
 Push-Location $backendRoot
@@ -81,7 +81,7 @@ try {
     else {
         & $python windows_service.py --startup auto install
     }
-    if ($LASTEXITCODE -ne 0) { throw "Không thể cài Windows Service" }
+    if ($LASTEXITCODE -ne 0) { throw "Failed to install the Windows Service." }
 }
 finally { Pop-Location }
 & sc.exe failure $serviceName reset= 86400 actions= restart/5000/restart/15000/restart/60000 | Out-Null
@@ -113,5 +113,5 @@ Start-Service -Name $serviceName
 Start-Website -Name $SiteName
 Start-Sleep -Seconds 3
 $health = Invoke-RestMethod -Uri "http://127.0.0.1:$SitePort/health" -TimeoutSec 15
-if ($health.status -ne "ok") { throw "Health check không thành công" }
-Write-Host "Triển khai thành công: http://localhost:$SitePort" -ForegroundColor Green
+if ($health.status -ne "ok") { throw "Health check failed." }
+Write-Host "Deployment completed: http://localhost:$SitePort" -ForegroundColor Green
