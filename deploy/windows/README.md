@@ -4,7 +4,7 @@ Kiến trúc production không Docker:
 
 - IIS phục vụ frontend tĩnh tại cổng `8088`.
 - IIS URL Rewrite + ARR chuyển `/api` và `/health` về `127.0.0.1:8000`.
-- FastAPI/Uvicorn chạy dưới Windows Service `MaterialMasterdataBackend`.
+- FastAPI/Uvicorn chạy dưới Windows Startup Task `MaterialMasterdataBackend`.
 - PostgreSQL 16 chạy native dưới Windows Service của PostgreSQL.
 
 ## 1. Cài phần mềm nền
@@ -60,6 +60,12 @@ Chạy lại script:
 ./deploy/windows/deploy-iis.ps1
 ```
 
+Nếu Python không có trong `PATH`, truyền đường dẫn đầy đủ, ví dụ:
+
+```powershell
+./deploy/windows/deploy-iis.ps1 -PythonExe "D:\Program Files\Python312\python.exe"
+```
+
 Truy cập: `http://localhost:8088`.
 
 ## 4. Import Danh mục vật tư
@@ -70,9 +76,9 @@ Truy cập: `http://localhost:8088`.
 C:\MaterialMasterdataData\Danh muc vat tu.xlsx
 ```
 
-Admin có thể đổi đường dẫn và giờ chạy tại màn hình **Quản trị**. Đường dẫn phải là đường dẫn nhìn thấy từ tài khoản chạy Windows Service.
+Admin có thể đổi đường dẫn và giờ chạy tại màn hình **Quản trị**. Đường dẫn phải là đường dẫn nhìn thấy từ tài khoản chạy Startup Task.
 
-Với file trên thư mục share/UNC, không dùng `LocalSystem`. Mở `services.msc` → `Material Masterdata Portal Backend` → **Log On** và đặt tài khoản domain có quyền đọc thư mục share.
+Với file trên thư mục share/UNC, đổi tài khoản chạy task trong Task Scheduler sang tài khoản domain có quyền đọc thư mục share.
 
 ## 5. Nâng cấp source
 
@@ -82,12 +88,12 @@ Sau khi `git pull`, chạy lại:
 ./deploy/windows/deploy-iis.ps1
 ```
 
-Script dừng backend, cập nhật source/dependency, cập nhật Windows Service, cập nhật frontend IIS và kiểm tra `/health`. File `.env` hiện tại được giữ nguyên.
+Script dừng backend, cập nhật source/dependency, cập nhật Windows Startup Task, cập nhật frontend IIS và kiểm tra `/health`. File `.env` hiện tại được giữ nguyên.
 
 ## 6. Kiểm tra và vận hành
 
 ```powershell
-Get-Service MaterialMasterdataBackend
+Get-ScheduledTask MaterialMasterdataBackend
 Invoke-RestMethod http://127.0.0.1:8000/health
 Invoke-RestMethod http://127.0.0.1:8088/health
 ```
@@ -101,7 +107,8 @@ C:\Apps\MaterialMasterdataPortal\backend\logs\backend.log
 Khởi động lại backend:
 
 ```powershell
-Restart-Service MaterialMasterdataBackend
+Stop-ScheduledTask MaterialMasterdataBackend
+Start-ScheduledTask MaterialMasterdataBackend
 ```
 
-Nếu giao diện chạy nhưng API lỗi `502`, kiểm tra Windows Service, log backend, kết nối PostgreSQL và `.env`.
+Nếu giao diện chạy nhưng API lỗi `502`, kiểm tra Startup Task, log backend, kết nối PostgreSQL và `.env`.
