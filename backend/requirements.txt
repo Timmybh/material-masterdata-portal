@@ -11,4 +11,3 @@ Unidecode==1.4.0
 python-multipart==0.0.20
 email-validator==2.2.0
 tzdata==2025.2
-pywin32==311; sys_platform == "win32"
