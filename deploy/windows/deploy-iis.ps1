@@ -16,9 +16,24 @@ $frontendRoot = Join-Path $InstallRoot "frontend"
 $venvRoot = Join-Path $InstallRoot ".venv"
 $serviceName = "MaterialMasterdataBackend"
 
-Import-Module ServerManager
-$features = @("Web-Server", "Web-Static-Content", "Web-Default-Doc", "Web-Http-Errors", "Web-Http-Logging", "Web-Request-Monitor", "Web-Mgmt-Tools")
-Install-WindowsFeature -Name $features | Out-Null
+$serverManager = Get-Module -ListAvailable -Name ServerManager
+if ($serverManager) {
+    Import-Module ServerManager
+    $features = @("Web-Server", "Web-Static-Content", "Web-Default-Doc", "Web-Http-Errors", "Web-Http-Logging", "Web-Request-Monitor", "Web-Mgmt-Tools")
+    Install-WindowsFeature -Name $features | Out-Null
+}
+else {
+    Import-Module Dism
+    $features = @(
+        "IIS-WebServerRole", "IIS-WebServer", "IIS-CommonHttpFeatures",
+        "IIS-DefaultDocument", "IIS-StaticContent", "IIS-HttpErrors",
+        "IIS-HealthAndDiagnostics", "IIS-HttpLogging", "IIS-RequestMonitor",
+        "IIS-ManagementConsole"
+    )
+    foreach ($feature in $features) {
+        Enable-WindowsOptionalFeature -Online -FeatureName $feature -All -NoRestart | Out-Null
+    }
+}
 Import-Module WebAdministration
 
 $appcmd = Join-Path $env:windir "System32\inetsrv\appcmd.exe"
