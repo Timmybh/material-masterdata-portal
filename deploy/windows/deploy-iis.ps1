@@ -20,6 +20,7 @@ $venvRoot = Join-Path $InstallRoot ".venv"
 $serviceName = "MaterialMasterdataBackend"
 $taskName = "MaterialMasterdataBackend"
 $jobsTaskName = "MaterialMasterdataJobs"
+$maxUploadBytes = 104857600
 
 $serverManager = Get-Module -ListAvailable -Name ServerManager
 if ($serverManager) {
@@ -179,6 +180,11 @@ else {
     Set-ItemProperty "IIS:\Sites\$SiteName" -Name physicalPath -Value $frontendRoot
     Set-ItemProperty "IIS:\Sites\$SiteName" -Name applicationPool -Value $SiteName
 }
+
+# ARR reads the request body before forwarding it to FastAPI. Increase both IIS
+# request filtering and ARR read-ahead limits so Excel/CSV imports are accepted.
+Set-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST" -Location $SiteName -Filter "system.webServer/security/requestFiltering/requestLimits" -Name "maxAllowedContentLength" -Value $maxUploadBytes
+Set-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST" -Location $SiteName -Filter "system.webServer/serverRuntime" -Name "uploadReadAheadSize" -Value $maxUploadBytes
 
 if (-not (Get-NetFirewallRule -DisplayName "Material Masterdata Portal HTTP" -ErrorAction SilentlyContinue)) {
     New-NetFirewallRule -DisplayName "Material Masterdata Portal HTTP" -Direction Inbound -Action Allow -Protocol TCP -LocalPort $SitePort | Out-Null
