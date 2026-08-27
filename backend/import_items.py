@@ -31,8 +31,9 @@ def source_rows(path):
     wb=load_workbook(path,read_only=True,data_only=True);ws=wb[wb.sheetnames[0]]
     rows=ws.iter_rows(values_only=True)
     return next(rows),rows,wb
-def run(path:str):
-    init_db();raw_headers,rows,source=source_rows(path)
+def run(path:str,initialize_schema:bool=False):
+    if initialize_schema:init_db()
+    raw_headers,rows,source=source_rows(path)
     headers=[h if h not in (None,"") else f"__unnamed_{i}" for i,h in enumerate(raw_headers)];pos={h:i for i,h in enumerate(headers)}
     prepared=[];skipped=0
     try:
@@ -64,4 +65,4 @@ def run(path:str):
     total=len(prepared);print(f"Done: {total} items; skipped: {skipped}")
     return {"imported":total,"skipped":skipped}
 if __name__=="__main__":
-    p=argparse.ArgumentParser();p.add_argument("xlsx");run(p.parse_args().xlsx)
+    p=argparse.ArgumentParser();p.add_argument("xlsx");run(p.parse_args().xlsx,initialize_schema=True)

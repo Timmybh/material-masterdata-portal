@@ -5,8 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "Material Masterdata Portal"
     environment: str = "development"
-    database_url: str = "postgresql+psycopg://postgres:12345678@postgres:5432/masterdata"
-    jwt_secret: str = "CHANGE_ME_IN_PRODUCTION"
+    database_url: str = "postgresql+psycopg://postgres@postgres:5432/masterdata"
+    jwt_secret: str = ""
     jwt_exp_minutes: int = 480
     google_client_id: str = ""
     cors_origins: str = "http://localhost:5173,http://localhost:8088"
@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     auto_import_hour: int = 19
     auto_import_minute: int = 0
     auto_import_timezone: str = "Asia/Ho_Chi_Minh"
+    run_background_jobs: bool = True
+    init_db_on_startup: bool = True
+    db_pool_size: int = 5
+    db_max_overflow: int = 5
+    db_pool_timeout_seconds: int = 5
+    db_pool_recycle_seconds: int = 300
+    db_connect_timeout_seconds: int = 5
+    db_statement_timeout_ms: int = 30000
+    db_lock_timeout_ms: int = 5000
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

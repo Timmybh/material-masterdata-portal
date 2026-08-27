@@ -1,5 +1,5 @@
 param(
-    [string]$PostgresBin = "C:\Program Files\PostgreSQL\16\bin",
+    [string]$PostgresBin = "C:\Program Files\PostgreSQL\18\bin",
     [string]$DatabaseHost = "127.0.0.1",
     [int]$DatabasePort = 5432,
     [string]$DatabaseName = "masterdata",

@@ -1,15 +1,25 @@
-# Material Masterdata Portal V1.6.8
+# Material Masterdata Portal V1.6.9
 
 ## Kiến trúc triển khai hiện tại
 
 Production được triển khai trực tiếp trên Windows Server, không dùng Docker:
 
 - IIS phục vụ frontend và reverse proxy API tại cổng `8088`.
-- FastAPI/Uvicorn chạy bằng Windows Service.
-- PostgreSQL 16 cài native, giữ PostgreSQL Full-Text Search và trigram search.
+- FastAPI/Uvicorn chạy 4 worker bằng Windows Startup Task; job nền chạy trong task riêng.
+- PostgreSQL 18 cài native, giữ PostgreSQL Full-Text Search và trigram search.
 - Hướng dẫn và script: [`deploy/windows/README.md`](deploy/windows/README.md).
 
 Các file Docker/Kubernetes cũ chỉ được giữ lại để tham khảo lịch sử, không thuộc luồng triển khai production hiện tại.
+
+## Thay đổi V1.6.9
+
+- Chuẩn bị tải khoảng 300 tài khoản tra cứu đồng thời bằng 4 Uvicorn worker.
+- Tách scheduler/import khỏi web worker để không nhân bản job khi tăng worker.
+- Giới hạn pool PostgreSQL theo worker, timeout nhanh và tự tái chế kết nối.
+- `/health` kiểm tra PostgreSQL thật; bổ sung `/health/live` cho kiểm tra tiến trình.
+- Scheduled Task chạy trực tiếp Python, không qua `cmd.exe`/batch launcher.
+- Tự phục hồi trạng thái import bị gián đoạn và không chạy migration trong import giao diện.
+- Ghi log đa tiến trình có xoay vòng; bổ sung index phục vụ đăng nhập và tra cứu mã.
 
 ## Thay đổi V1.6.8
 
@@ -55,7 +65,7 @@ Copy-Item .env.example .env
 docker compose up -d --build
 ```
 
-Truy cập `http://localhost:8088`. PostgreSQL mặc định: `localhost:5432`, database `masterdata`, user `postgres`, password `12345678`.
+Truy cập `http://localhost:8088`. PostgreSQL mặc định: `localhost:5432`, database `masterdata`, user `postgres`; mật khẩu phải được đặt riêng trong `.env` và không commit vào Git.
 
 Service `db-init` tự tạo/nâng cấp schema và thay thế toàn bộ danh mục từ `data/Danh muc vat tu.xlsx`. File dữ liệu lớn không lưu trong Git để tránh hỏng file nhị phân khi clone; hãy copy file Excel gốc vào thư mục `data` trước khi chạy reset. Script sẽ kiểm tra chữ ký XLSX trước khi thay thế dữ liệu.
 

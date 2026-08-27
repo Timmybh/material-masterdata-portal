@@ -3,7 +3,25 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from .config import get_settings
 
 settings = get_settings()
-engine = create_engine(settings.database_url, pool_pre_ping=True, pool_size=10, max_overflow=20)
+connect_args = {
+    "connect_timeout": settings.db_connect_timeout_seconds,
+    "application_name": "MaterialMasterdataPortal",
+    "options": (
+        f"-c statement_timeout={settings.db_statement_timeout_ms} "
+        f"-c lock_timeout={settings.db_lock_timeout_ms}"
+    ),
+}
+engine = create_engine(
+    settings.database_url,
+    pool_pre_ping=True,
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_max_overflow,
+    pool_timeout=settings.db_pool_timeout_seconds,
+    pool_recycle=settings.db_pool_recycle_seconds,
+    pool_reset_on_return="rollback",
+    pool_use_lifo=True,
+    connect_args=connect_args,
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
@@ -54,10 +72,14 @@ def init_db():
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_username_lower ON users (LOWER(username)) WHERE username IS NOT NULL"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_email_lower ON users (LOWER(email))"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_items_code ON items(code)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_items_fts ON items USING GIN (to_tsvector('simple', search_text))"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_items_trgm ON items USING GIN (search_text gin_trgm_ops)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_items_code_trgm ON items USING GIN (code gin_trgm_ops)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_items_code_lower_trgm ON items USING GIN (LOWER(code) gin_trgm_ops)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_items_old_code_trgm ON items USING GIN (old_code gin_trgm_ops)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_items_new_code_trgm ON items USING GIN (new_code gin_trgm_ops)"))
         expected=set(item_columns)|{"id","code","name","item_type_name","parent_code","item_group_code","kind_code","customer_code","unit_price","is_active","search_text","source_modified_at"}
         actual=set(conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='items'")).scalars())
         missing=expected-actual

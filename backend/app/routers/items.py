@@ -12,7 +12,7 @@ def search_items(q:str=Query(min_length=1,max_length=200),limit:int=Query(20,ge=
     nq=" ".join(unidecode(q).lower().split());tokens=nq.split();tsq=func.websearch_to_tsquery("simple",nq);tsv=func.to_tsvector("simple",Item.search_text)
     score=(func.ts_rank_cd(tsv,tsq)*3+func.similarity(Item.search_text,nq)+func.similarity(func.lower(Item.code),nq)*1.5).label("score")
     all_tokens=[Item.search_text.ilike(f"%{token}%") for token in tokens]
-    conditions=[Item.is_active.is_(True),or_(tsv.op("@@")(tsq),and_(*all_tokens),Item.search_text.op("%")(nq),func.lower(Item.code).op("%")(nq),func.lower(Item.code).contains(nq),func.lower(func.coalesce(Item.old_code,"")).contains(nq),func.lower(func.coalesce(Item.new_code,"")).contains(nq))]
+    conditions=[Item.is_active.is_(True),or_(tsv.op("@@")(tsq),and_(*all_tokens),Item.search_text.op("%")(nq),func.lower(Item.code).op("%")(nq),func.lower(Item.code).contains(nq),Item.old_code.ilike(f"%{nq}%"),Item.new_code.ilike(f"%{nq}%"))]
     if not include_groups:conditions.append(Item.is_group.is_(False))
     if item_type:conditions.append(Item.item_type_name==item_type)
     if item_group:conditions.append(Item.item_group_code==item_group)

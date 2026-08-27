@@ -4,14 +4,15 @@ Kiến trúc production không Docker:
 
 - IIS phục vụ frontend tĩnh tại cổng `8088`.
 - IIS URL Rewrite + ARR chuyển `/api` và `/health` về `127.0.0.1:8000`.
-- FastAPI/Uvicorn chạy dưới Windows Startup Task `MaterialMasterdataBackend`.
-- PostgreSQL 16 chạy native dưới Windows Service của PostgreSQL.
+- FastAPI/Uvicorn chạy 4 worker dưới Windows Startup Task `MaterialMasterdataBackend`.
+- Job import/hết hạn chạy riêng dưới Startup Task `MaterialMasterdataJobs`.
+- PostgreSQL 18 chạy native dưới Windows Service của PostgreSQL.
 
 ## 1. Cài phần mềm nền
 
 Trên Windows Server, cài:
 
-1. PostgreSQL 16 x64 và pgAdmin 4.
+1. PostgreSQL 18 x64 và pgAdmin 4.
 2. Python 3.12 x64; bật tùy chọn thêm Python vào `PATH`.
 3. IIS URL Rewrite 2.1: <https://www.iis.net/downloads/microsoft/url-rewrite>
 4. IIS Application Request Routing 3.0: <https://www.iis.net/downloads/microsoft/application-request-routing>
@@ -27,9 +28,9 @@ Set-ExecutionPolicy -Scope Process Bypass
 ./deploy/windows/install-postgresql.ps1 -DatabasePassword "MAT_KHAU_POSTGRES"
 ```
 
-Nếu PostgreSQL không nằm tại `C:\Program Files\PostgreSQL\16\bin`, truyền thêm `-PostgresBin`.
+Nếu PostgreSQL không nằm tại `C:\Program Files\PostgreSQL\18\bin`, truyền thêm `-PostgresBin`.
 
-Script tạo database `masterdata`, extension `pg_trgm` và `unaccent`. Backend tự tạo/nâng cấp bảng khi khởi động.
+Script tạo database `masterdata`, extension `pg_trgm` và `unaccent`. Script deploy tạo/nâng cấp bảng một lần trước khi khởi động các web worker.
 
 ## 3. Triển khai lần đầu
 
@@ -41,7 +42,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 Lần chạy đầu tạo file:
 
 ```text
-C:\Apps\MaterialMasterdataPortal\backend\.env
+C:\Applications\MaterialMasterdataPortal\backend\.env
 ```
 
 Mở file này và thay tối thiểu:
@@ -93,7 +94,7 @@ Script dừng backend, cập nhật source/dependency, cập nhật Windows Star
 ## 6. Kiểm tra và vận hành
 
 ```powershell
-Get-ScheduledTask MaterialMasterdataBackend
+Get-ScheduledTask -TaskName MaterialMasterdataBackend,MaterialMasterdataJobs
 Invoke-RestMethod http://127.0.0.1:8000/health
 Invoke-RestMethod http://127.0.0.1:8088/health
 ```
@@ -101,7 +102,7 @@ Invoke-RestMethod http://127.0.0.1:8088/health
 Log backend:
 
 ```text
-C:\Apps\MaterialMasterdataPortal\backend\logs\backend.log
+C:\Applications\MaterialMasterdataPortal\backend\logs\backend.log
 ```
 
 Khởi động lại backend:
@@ -109,6 +110,8 @@ Khởi động lại backend:
 ```powershell
 Stop-ScheduledTask MaterialMasterdataBackend
 Start-ScheduledTask MaterialMasterdataBackend
+Stop-ScheduledTask MaterialMasterdataJobs
+Start-ScheduledTask MaterialMasterdataJobs
 ```
 
-Nếu giao diện chạy nhưng API lỗi `502`, kiểm tra Startup Task, log backend, kết nối PostgreSQL và `.env`.
+`/health` chỉ trả `ok` khi PostgreSQL thực sự kết nối được. Nếu giao diện chạy nhưng API lỗi `502`, kiểm tra hai Startup Task, log backend, kết nối PostgreSQL và `.env`.

@@ -1,8 +1,10 @@
 param(
-    [string]$InstallRoot = "C:\Apps\MaterialMasterdataPortal",
+    [string]$InstallRoot = "C:\Applications\MaterialMasterdataPortal",
     [string]$SiteName = "MaterialMasterdataPortal",
     [int]$SitePort = 8088,
-    [string]$PythonExe = ""
+    [string]$PythonExe = "",
+    [ValidateRange(2, 8)]
+    [int]$WorkerCount = 4
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,6 +19,7 @@ $frontendRoot = Join-Path $InstallRoot "frontend"
 $venvRoot = Join-Path $InstallRoot ".venv"
 $serviceName = "MaterialMasterdataBackend"
 $taskName = "MaterialMasterdataBackend"
+$jobsTaskName = "MaterialMasterdataJobs"
 
 $serverManager = Get-Module -ListAvailable -Name ServerManager
 if ($serverManager) {
@@ -50,9 +53,11 @@ catch {
     throw "IIS Application Request Routing (ARR) is not installed. Install ARR and run this script again."
 }
 
-$existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-if ($existingTask -and $existingTask.State -eq "Running") {
-    Stop-ScheduledTask -TaskName $taskName
+foreach ($scheduledTaskName in @($taskName, $jobsTaskName)) {
+    $existingTask = Get-ScheduledTask -TaskName $scheduledTaskName -ErrorAction SilentlyContinue
+    if ($existingTask -and $existingTask.State -eq "Running") {
+        Stop-ScheduledTask -TaskName $scheduledTaskName
+    }
 }
 
 # Remove the legacy pywin32 service. pywin32 services installed from a virtual
@@ -72,6 +77,7 @@ New-Item -ItemType Directory -Force -Path $backendRoot, $frontendRoot | Out-Null
 Copy-Item (Join-Path $sourceRoot "backend\app") $backendRoot -Recurse -Force
 Copy-Item (Join-Path $sourceRoot "backend\import_items.py") $backendRoot -Force
 Copy-Item (Join-Path $sourceRoot "backend\requirements.txt") $backendRoot -Force
+Copy-Item (Join-Path $sourceRoot "backend\logging.json") $backendRoot -Force
 
 $frontendFiles = @("index.html", "app.js", "styles.css", "v16.css", "catalogs.css", "dovitec-logo.png")
 foreach ($file in $frontendFiles) {
@@ -108,23 +114,53 @@ if ($envText -match "CHANGE_ME|CHANGE_TO_A_LONG_RANDOM_SECRET") {
     throw "File $envFile still contains sample passwords or secrets. Update it before starting the backend."
 }
 
+function Set-EnvValue {
+    param([string]$Path, [string]$Name, [string]$Value)
+    $content = Get-Content $Path -Raw
+    $pattern = "(?m)^" + [regex]::Escape($Name) + "=.*$"
+    $line = "$Name=$Value"
+    if ($content -match $pattern) {
+        $content = [regex]::Replace($content, $pattern, $line)
+        [System.IO.File]::WriteAllText($Path, $content, (New-Object System.Text.UTF8Encoding($false)))
+    }
+    else {
+        if ($content -and -not $content.EndsWith("`n")) { $content += "`r`n" }
+        $content += "$line`r`n"
+        [System.IO.File]::WriteAllText($Path, $content, (New-Object System.Text.UTF8Encoding($false)))
+    }
+}
+
+Set-EnvValue -Path $envFile -Name "RUN_BACKGROUND_JOBS" -Value "false"
+Set-EnvValue -Path $envFile -Name "INIT_DB_ON_STARTUP" -Value "false"
+Set-EnvValue -Path $envFile -Name "DB_POOL_SIZE" -Value "5"
+Set-EnvValue -Path $envFile -Name "DB_MAX_OVERFLOW" -Value "5"
+Set-EnvValue -Path $envFile -Name "DB_POOL_TIMEOUT_SECONDS" -Value "5"
+Set-EnvValue -Path $envFile -Name "DB_POOL_RECYCLE_SECONDS" -Value "300"
+Set-EnvValue -Path $envFile -Name "DB_CONNECT_TIMEOUT_SECONDS" -Value "5"
+Set-EnvValue -Path $envFile -Name "DB_STATEMENT_TIMEOUT_MS" -Value "30000"
+Set-EnvValue -Path $envFile -Name "DB_LOCK_TIMEOUT_MS" -Value "5000"
+
 $logsRoot = Join-Path $backendRoot "logs"
 $logFile = Join-Path $logsRoot "backend.log"
-$launcher = Join-Path $backendRoot "start-backend.cmd"
 New-Item -ItemType Directory -Force -Path $logsRoot | Out-Null
-$launcherText = @"
-@echo off
-cd /d "$backendRoot"
-"$python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1 >> "$logFile" 2>&1
-"@
-Set-Content -Path $launcher -Encoding ASCII -Value $launcherText
 
-$taskArguments = '/d /c ""{0}""' -f $launcher
-$taskAction = New-ScheduledTaskAction -Execute $env:ComSpec -Argument $taskArguments
+Push-Location $backendRoot
+try {
+    & $python -c "from app.db import init_db; init_db()"
+    if ($LASTEXITCODE -ne 0) { throw "Database initialization failed." }
+}
+finally {
+    Pop-Location
+}
+
+$webArguments = "-m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers $WorkerCount --proxy-headers --forwarded-allow-ips 127.0.0.1 --log-config logging.json"
+$taskAction = New-ScheduledTaskAction -Execute $python -Argument $webArguments -WorkingDirectory $backendRoot
+$jobsAction = New-ScheduledTaskAction -Execute $python -Argument "-m app.jobs" -WorkingDirectory $backendRoot
 $taskTrigger = New-ScheduledTaskTrigger -AtStartup
-$taskSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+$taskSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 $taskPrincipal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $taskTrigger -Settings $taskSettings -Principal $taskPrincipal -Description "Material Masterdata Portal FastAPI backend" -Force | Out-Null
+Register-ScheduledTask -TaskName $jobsTaskName -Action $jobsAction -Trigger $taskTrigger -Settings $taskSettings -Principal $taskPrincipal -Description "Material Masterdata Portal background jobs" -Force | Out-Null
 
 Set-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST" -Filter "system.webServer/proxy" -Name "enabled" -Value "True"
 Set-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST" -Filter "system.webServer/proxy" -Name "preserveHostHeader" -Value "True"
@@ -149,8 +185,9 @@ if (-not (Get-NetFirewallRule -DisplayName "Material Masterdata Portal HTTP" -Er
 }
 
 Start-ScheduledTask -TaskName $taskName
+Start-ScheduledTask -TaskName $jobsTaskName
 $backendHealthy = $false
-for ($attempt = 1; $attempt -le 30; $attempt++) {
+for ($attempt = 1; $attempt -le 60; $attempt++) {
     try {
         $backendHealth = Invoke-RestMethod -Uri "http://127.0.0.1:8000/health" -TimeoutSec 2
         if ($backendHealth.status -eq "ok") {

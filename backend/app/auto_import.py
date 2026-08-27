@@ -62,6 +62,35 @@ def _set_run_finished(result: dict | None = None, error: Exception | None = None
             config.last_error = None
 
 
+def recover_interrupted_import() -> bool:
+    """Mark a stale RUNNING flag left behind by a terminated process."""
+    with engine.connect() as connection:
+        locked = connection.scalar(
+            text("SELECT pg_try_advisory_lock(:lock_id)"),
+            {"lock_id": IMPORT_LOCK_ID},
+        )
+        if not locked:
+            return False
+        try:
+            with SessionLocal.begin() as db:
+                config = get_import_config(db)
+                if not config.is_running:
+                    return False
+                config.is_running = False
+                config.last_status = "FAILED"
+                config.last_completed_at = datetime.now(timezone.utc)
+                config.last_error = (
+                    "Previous import was interrupted while the backend was stopped; "
+                    "the database transaction was rolled back."
+                )
+                return True
+        finally:
+            connection.execute(
+                text("SELECT pg_advisory_unlock(:lock_id)"),
+                {"lock_id": IMPORT_LOCK_ID},
+            )
+
+
 def execute_import(source_path: str, trigger: str) -> dict:
     source = Path(source_path)
     with engine.connect() as connection:
@@ -77,7 +106,7 @@ def execute_import(source_path: str, trigger: str) -> dict:
             with tempfile.TemporaryDirectory(prefix="masterdata-import-") as temp_dir:
                 snapshot = Path(temp_dir) / source.name
                 shutil.copy2(source, snapshot)
-                result = run(str(snapshot))
+                result = run(str(snapshot), initialize_schema=False)
             _set_run_finished(result=result)
             logger.info("Import %s hoàn tất từ %s: %s", trigger, source, result)
             return result
