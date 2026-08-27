@@ -3,6 +3,7 @@ import json
 import os
 import unittest
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from unittest.mock import patch
 
 from fastapi import Response
@@ -13,6 +14,7 @@ os.environ["RUN_BACKGROUND_JOBS"] = "false"
 
 from app.db import engine  # noqa: E402
 from app.main import app, health, live  # noqa: E402
+from app.routers.admin import run_uploaded_import  # noqa: E402
 from import_items import run  # noqa: E402
 
 
@@ -60,6 +62,18 @@ class RuntimeTests(unittest.TestCase):
 
     def test_application_version(self):
         self.assertEqual(app.version, "1.6.9")
+
+    def test_manual_import_returns_before_background_processing(self):
+        route = next(route for route in app.routes if route.path == "/api/admin/item-import/upload")
+        self.assertEqual(route.status_code, 202)
+
+    def test_uploaded_import_removes_temporary_file_on_failure(self):
+        with NamedTemporaryFile(delete=False) as source:
+            path = Path(source.name)
+        with patch("app.routers.admin.execute_import", side_effect=RuntimeError("failed")):
+            with self.assertRaises(RuntimeError):
+                run_uploaded_import(path)
+        self.assertFalse(path.exists())
 
 
 if __name__ == "__main__":
