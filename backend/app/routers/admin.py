@@ -1,9 +1,8 @@
-import asyncio
 import shutil
 import tempfile
 from pathlib import Path
 from uuid import UUID
-from fastapi import APIRouter,Depends,File,HTTPException,UploadFile
+from fastapi import APIRouter,BackgroundTasks,Depends,File,HTTPException,UploadFile,status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from ..auth import require_roles
@@ -37,8 +36,8 @@ def update_item_import_config(payload:AutoImportConfigUpdate,db:Session=Depends(
     db.commit();db.refresh(config)
     return import_config_out(config)
 
-@router.post("/item-import/upload")
-async def import_items_from_upload(file:UploadFile=File(...),_:User=Depends(allowed)):
+@router.post("/item-import/upload",status_code=status.HTTP_202_ACCEPTED)
+async def import_items_from_upload(background_tasks:BackgroundTasks,file:UploadFile=File(...),_:User=Depends(allowed)):
     suffix=Path(file.filename or "").suffix.lower()
     if suffix not in {".xlsx",".csv"}:
         raise HTTPException(422,"Chỉ hỗ trợ file .xlsx hoặc .csv")
@@ -47,8 +46,9 @@ async def import_items_from_upload(file:UploadFile=File(...),_:User=Depends(allo
         with tempfile.NamedTemporaryFile(prefix="admin-item-import-",suffix=suffix,delete=False) as target:
             temp_path=Path(target.name)
             shutil.copyfileobj(file.file,target)
-        result=await asyncio.to_thread(execute_import,str(temp_path),"MANUAL")
-        return {"message":"Import danh mục vật tư thành công",**result}
+        background_tasks.add_task(run_uploaded_import,temp_path)
+        temp_path=None
+        return {"message":"Đã tiếp nhận file; hệ thống đang import trong nền"}
     except ImportAlreadyRunningError as exc:
         raise HTTPException(409,str(exc)) from exc
     except (ValueError,FileNotFoundError) as exc:
@@ -59,6 +59,12 @@ async def import_items_from_upload(file:UploadFile=File(...),_:User=Depends(allo
         await file.close()
         if temp_path:
             temp_path.unlink(missing_ok=True)
+
+def run_uploaded_import(temp_path:Path):
+    try:
+        execute_import(str(temp_path),"MANUAL")
+    finally:
+        temp_path.unlink(missing_ok=True)
 @router.get("/users",response_model=list[UserOut])
 def users(db:Session=Depends(get_db),_:User=Depends(allowed)):return db.scalars(select(User).order_by(User.created_at.desc())).all()
 @router.post("/users",response_model=UserOut,status_code=201)
