@@ -14,8 +14,8 @@ def read_password() -> str:
     confirmation = getpass.getpass("Nhập lại mật khẩu: ")
     if password != confirmation:
         raise ValueError("Mật khẩu xác nhận không khớp")
-    if len(password) < 8:
-        raise ValueError("Mật khẩu phải có ít nhất 8 ký tự")
+    if len(password) < 5:
+        raise ValueError("Mật khẩu phải có ít nhất 5 ký tự")
     return password
 
 

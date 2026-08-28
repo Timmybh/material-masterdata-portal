@@ -1,4 +1,4 @@
-# Material Masterdata Portal V1.6.9
+# Material Masterdata Portal V1.6.10
 
 ## Kiến trúc triển khai hiện tại
 
@@ -10,6 +10,12 @@ Production được triển khai trực tiếp trên Windows Server, không dùn
 - Hướng dẫn và script: [`deploy/windows/README.md`](deploy/windows/README.md).
 
 Các file Docker/Kubernetes cũ chỉ được giữ lại để tham khảo lịch sử, không thuộc luồng triển khai production hiện tại.
+
+## Thay đổi V1.6.10
+
+- Bộ phận không còn là trường bắt buộc khi tạo hoặc chỉnh sửa yêu cầu đặt mã.
+- Mật khẩu người dùng tối thiểu 5 ký tự và được phép giống tên tài khoản.
+- Kết quả tra cứu tiếp tục chỉ tải tối đa 20 dòng nhưng hiển thị đầy đủ tổng số kết quả phù hợp.
 
 ## Thay đổi V1.6.9
 

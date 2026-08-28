@@ -7,6 +7,7 @@ from tempfile import NamedTemporaryFile
 from unittest.mock import patch
 
 from fastapi import Response
+from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 os.environ["INIT_DB_ON_STARTUP"] = "false"
@@ -15,6 +16,7 @@ os.environ["RUN_BACKGROUND_JOBS"] = "false"
 from app.db import engine  # noqa: E402
 from app.main import app, health, live  # noqa: E402
 from app.routers.admin import run_uploaded_import  # noqa: E402
+from app.schemas import AdminUserCreate, RequestCreate  # noqa: E402
 from import_items import run  # noqa: E402
 
 
@@ -61,7 +63,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("uvicorn.access", config["loggers"])
 
     def test_application_version(self):
-        self.assertEqual(app.version, "1.6.9")
+        self.assertEqual(app.version, "1.6.10")
 
     def test_manual_import_returns_before_background_processing(self):
         route = next(route for route in app.routes if route.path == "/api/admin/item-import/upload")
@@ -74,6 +76,32 @@ class RuntimeTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 run_uploaded_import(path)
         self.assertFalse(path.exists())
+
+    def test_request_department_is_optional(self):
+        request = RequestCreate(
+            requester_name="Nguyen Van A",
+            item_name="But bi",
+            unit="Cai",
+        )
+        self.assertEqual(request.department, "")
+
+    def test_password_accepts_five_characters_and_matching_username(self):
+        user = AdminUserCreate(
+            email="user@example.com",
+            username="user1",
+            password="user1",
+            name="Test User",
+        )
+        self.assertEqual(user.password, user.username)
+
+    def test_password_rejects_fewer_than_five_characters(self):
+        with self.assertRaises(ValidationError):
+            AdminUserCreate(
+                email="user@example.com",
+                username="user1",
+                password="1234",
+                name="Test User",
+            )
 
 
 if __name__ == "__main__":
