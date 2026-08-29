@@ -7,16 +7,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from ..auth import require_roles
 from ..db import get_db
-from ..auto_import import ImportAlreadyRunningError,execute_import,get_import_config
-from ..models import AutoImportConfig,MaterialRequest,RequestAudit,Role,User,UserAudit
+from ..auto_import import ImportAlreadyRunningError,execute_import,get_import_config,import_is_running
+from ..models import AutoImportConfig,ImportRunHistory,MaterialRequest,RequestAudit,Role,User,UserAudit
 from ..passwords import hash_password
-from ..schemas import AdminPasswordReset,AdminUserCreate,AutoImportConfigOut,AutoImportConfigUpdate,UserOut,UserRoleUpdate
+from ..schemas import AdminPasswordReset,AdminUserCreate,AutoImportConfigOut,AutoImportConfigUpdate,ImportRunHistoryOut,UserOut,UserRoleUpdate
 router=APIRouter(prefix="/api/admin",tags=["admin"]);allowed=require_roles(Role.ADMIN.value)
 
 def import_config_out(config:AutoImportConfig):
     return {
         "enabled":config.enabled,"file_path":config.file_path,"hour":config.hour,"minute":config.minute,
-        "timezone":config.timezone,"is_running":config.is_running,"scheduler_active":config.enabled,
+        "timezone":config.timezone,"is_running":import_is_running(),"scheduler_active":config.enabled,
         "last_trigger":config.last_trigger,"last_started_at":config.last_started_at,"last_completed_at":config.last_completed_at,
         "last_status":config.last_status,"last_imported":config.last_imported,"last_skipped":config.last_skipped,
         "last_error":config.last_error,"updated_at":config.updated_at,
@@ -36,17 +36,23 @@ def update_item_import_config(payload:AutoImportConfigUpdate,db:Session=Depends(
     db.commit();db.refresh(config)
     return import_config_out(config)
 
+@router.get("/item-import/history",response_model=list[ImportRunHistoryOut])
+def read_item_import_history(db:Session=Depends(get_db),_:User=Depends(allowed)):
+    return db.scalars(select(ImportRunHistory).order_by(ImportRunHistory.started_at.desc()).limit(20)).all()
+
 @router.post("/item-import/upload",status_code=status.HTTP_202_ACCEPTED)
 async def import_items_from_upload(background_tasks:BackgroundTasks,file:UploadFile=File(...),_:User=Depends(allowed)):
     suffix=Path(file.filename or "").suffix.lower()
     if suffix not in {".xlsx",".csv"}:
         raise HTTPException(422,"Chỉ hỗ trợ file .xlsx hoặc .csv")
+    if import_is_running():
+        raise HTTPException(409,"Một tác vụ import khác đang chạy")
     temp_path=None
     try:
         with tempfile.NamedTemporaryFile(prefix="admin-item-import-",suffix=suffix,delete=False) as target:
             temp_path=Path(target.name)
             shutil.copyfileobj(file.file,target)
-        background_tasks.add_task(run_uploaded_import,temp_path)
+        background_tasks.add_task(run_uploaded_import,temp_path,file.filename or temp_path.name)
         temp_path=None
         return {"message":"Đã tiếp nhận file; hệ thống đang import trong nền"}
     except ImportAlreadyRunningError as exc:
@@ -60,9 +66,9 @@ async def import_items_from_upload(background_tasks:BackgroundTasks,file:UploadF
         if temp_path:
             temp_path.unlink(missing_ok=True)
 
-def run_uploaded_import(temp_path:Path):
+def run_uploaded_import(temp_path:Path,source_name:str=""):
     try:
-        execute_import(str(temp_path),"MANUAL")
+        execute_import(str(temp_path),"MANUAL",source_name or temp_path.name)
     finally:
         temp_path.unlink(missing_ok=True)
 @router.get("/users",response_model=list[UserOut])

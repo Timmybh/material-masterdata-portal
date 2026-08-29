@@ -11,7 +11,7 @@ from sqlalchemy import text
 from import_items import run
 
 from .db import SessionLocal, engine
-from .models import AutoImportConfig
+from .models import AutoImportConfig, ImportRunHistory
 
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ def get_import_config(db=None) -> AutoImportConfig:
         return config
 
 
-def _set_run_started(trigger: str) -> None:
+def _set_run_started(trigger: str, source_name: str) -> int:
     with SessionLocal.begin() as db:
         config = get_import_config(db)
         config.is_running = True
@@ -45,21 +45,57 @@ def _set_run_started(trigger: str) -> None:
         config.last_started_at = datetime.now(timezone.utc)
         config.last_status = "RUNNING"
         config.last_error = None
+        history = ImportRunHistory(
+            trigger=trigger,
+            source_name=source_name,
+            status="RUNNING",
+            started_at=config.last_started_at,
+        )
+        db.add(history)
+        db.flush()
+        return history.id
 
 
-def _set_run_finished(result: dict | None = None, error: Exception | None = None) -> None:
+def _set_run_finished(run_id: int, result: dict | None = None, error: Exception | None = None) -> None:
     with SessionLocal.begin() as db:
         config = get_import_config(db)
+        history = db.get(ImportRunHistory, run_id)
+        completed_at = datetime.now(timezone.utc)
         config.is_running = False
-        config.last_completed_at = datetime.now(timezone.utc)
+        config.last_completed_at = completed_at
         if error:
             config.last_status = "FAILED"
             config.last_error = str(error)[:4000]
+            if history:
+                history.status = "FAILED"
+                history.completed_at = completed_at
+                history.error = str(error)[:4000]
         else:
             config.last_status = "SUCCESS"
             config.last_imported = int((result or {}).get("imported", 0))
             config.last_skipped = int((result or {}).get("skipped", 0))
             config.last_error = None
+            if history:
+                history.status = "SUCCESS"
+                history.completed_at = completed_at
+                history.imported = config.last_imported
+                history.skipped = config.last_skipped
+
+
+def import_is_running() -> bool:
+    """Read the PostgreSQL lock instead of trusting a possibly stale DB flag."""
+    with engine.connect() as connection:
+        locked = connection.scalar(
+            text("SELECT pg_try_advisory_lock(:lock_id)"),
+            {"lock_id": IMPORT_LOCK_ID},
+        )
+        if locked:
+            connection.execute(
+                text("SELECT pg_advisory_unlock(:lock_id)"),
+                {"lock_id": IMPORT_LOCK_ID},
+            )
+            return False
+        return True
 
 
 def recover_interrupted_import() -> bool:
@@ -80,9 +116,16 @@ def recover_interrupted_import() -> bool:
                 config.last_status = "FAILED"
                 config.last_completed_at = datetime.now(timezone.utc)
                 config.last_error = (
-                    "Previous import was interrupted while the backend was stopped; "
-                    "the database transaction was rolled back."
+                    "Lần import trước bị gián đoạn khi dịch vụ dừng; "
+                    "giao dịch cơ sở dữ liệu đã được hoàn tác."
                 )
+                interrupted = db.query(ImportRunHistory).filter(
+                    ImportRunHistory.status == "RUNNING"
+                ).all()
+                for history in interrupted:
+                    history.status = "FAILED"
+                    history.completed_at = config.last_completed_at
+                    history.error = config.last_error
                 return True
         finally:
             connection.execute(
@@ -91,14 +134,15 @@ def recover_interrupted_import() -> bool:
             )
 
 
-def execute_import(source_path: str, trigger: str) -> dict:
+def execute_import(source_path: str, trigger: str, source_name: str | None = None) -> dict:
     source = Path(source_path)
     with engine.connect() as connection:
         locked = connection.scalar(text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": IMPORT_LOCK_ID})
         if not locked:
             raise ImportAlreadyRunningError("Một tác vụ import khác đang chạy")
-        _set_run_started(trigger)
+        run_id = None
         try:
+            run_id = _set_run_started(trigger, source_name or source.name)
             if not source.is_file():
                 raise FileNotFoundError(f"Không tìm thấy file: {source}")
             if source.suffix.lower() not in {".xlsx", ".csv"}:
@@ -107,11 +151,12 @@ def execute_import(source_path: str, trigger: str) -> dict:
                 snapshot = Path(temp_dir) / source.name
                 shutil.copy2(source, snapshot)
                 result = run(str(snapshot), initialize_schema=False)
-            _set_run_finished(result=result)
+            _set_run_finished(run_id, result=result)
             logger.info("Import %s hoàn tất từ %s: %s", trigger, source, result)
             return result
         except Exception as exc:
-            _set_run_finished(error=exc)
+            if run_id is not None:
+                _set_run_finished(run_id, error=exc)
             logger.exception("Import %s thất bại từ file %s", trigger, source)
             raise
         finally:

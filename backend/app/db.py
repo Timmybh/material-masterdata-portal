@@ -85,7 +85,7 @@ def init_db():
         missing=expected-actual
         if missing:
             raise RuntimeError(f"Migration items chưa đầy đủ, thiếu cột: {', '.join(sorted(missing))}")
-    from .models import AutoImportConfig
+    from .models import AutoImportConfig, ImportRunHistory
     with SessionLocal() as db:
         config=db.get(AutoImportConfig,1)
         if not config:
@@ -96,6 +96,18 @@ def init_db():
                 hour=settings.auto_import_hour,
                 minute=settings.auto_import_minute,
                 timezone=settings.auto_import_timezone,
+            ))
+            db.commit()
+        elif config.last_started_at and not db.scalar(select(func.count(ImportRunHistory.id))):
+            db.add(ImportRunHistory(
+                trigger=config.last_trigger or "AUTO",
+                source_name=config.file_path if config.last_trigger == "AUTO" else "Lần import trước khi nâng cấp",
+                status=config.last_status or ("RUNNING" if config.is_running else "FAILED"),
+                started_at=config.last_started_at,
+                completed_at=config.last_completed_at,
+                imported=config.last_imported,
+                skipped=config.last_skipped,
+                error=config.last_error,
             ))
             db.commit()
     if settings.bootstrap_admin_password and settings.bootstrap_admin_emails:

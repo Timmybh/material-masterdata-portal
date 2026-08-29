@@ -63,11 +63,15 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("uvicorn.access", config["loggers"])
 
     def test_application_version(self):
-        self.assertEqual(app.version, "1.6.10")
+        self.assertEqual(app.version, "1.6.11")
 
     def test_manual_import_returns_before_background_processing(self):
         route = next(route for route in app.routes if route.path == "/api/admin/item-import/upload")
         self.assertEqual(route.status_code, 202)
+
+    def test_import_history_endpoint_is_available(self):
+        route = next(route for route in app.routes if route.path == "/api/admin/item-import/history")
+        self.assertEqual(route.status_code, 200)
 
     def test_uploaded_import_removes_temporary_file_on_failure(self):
         with NamedTemporaryFile(delete=False) as source:

@@ -101,6 +101,18 @@ class AutoImportConfig(Base):
     last_error: Mapped[str|None]=mapped_column(Text,nullable=True)
     updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=datetime.utcnow,onupdate=datetime.utcnow)
 
+class ImportRunHistory(Base):
+    __tablename__="import_run_history"
+    id: Mapped[int]=mapped_column(Integer,primary_key=True,autoincrement=True)
+    trigger: Mapped[str]=mapped_column(String(20),index=True)
+    source_name: Mapped[str]=mapped_column(Text,default="")
+    status: Mapped[str]=mapped_column(String(20),index=True)
+    started_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=datetime.utcnow,index=True)
+    completed_at: Mapped[datetime|None]=mapped_column(DateTime(timezone=True),nullable=True)
+    imported: Mapped[int|None]=mapped_column(Integer,nullable=True)
+    skipped: Mapped[int|None]=mapped_column(Integer,nullable=True)
+    error: Mapped[str|None]=mapped_column(Text,nullable=True)
+
 class MaterialRequest(Base):
     __tablename__="material_requests"
     id: Mapped[uuid.UUID]=mapped_column(primary_key=True,default=uuid.uuid4)
