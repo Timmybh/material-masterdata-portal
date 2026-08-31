@@ -98,6 +98,9 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("--workers $WorkerCount", script)
         self.assertIn("-ExecutionTimeLimit ([TimeSpan]::Zero)", script)
         self.assertIn('IMPORT_SPOOL_DIR', script)
+        self.assertIn('[int]$BackendPort = 8000', script)
+        self.assertIn('--port $BackendPort --workers $WorkerCount', script)
+        self.assertIn('Replace("__BACKEND_PORT__", [string]$BackendPort)', script)
 
     def test_frontend_polls_the_exact_job_id(self):
         frontend = (

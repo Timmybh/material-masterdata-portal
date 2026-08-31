@@ -2,6 +2,8 @@ param(
     [string]$InstallRoot = "C:\Applications\MaterialMasterdataPortal",
     [string]$SiteName = "MaterialMasterdataPortal",
     [int]$SitePort = 8088,
+    [ValidateRange(1024, 65535)]
+    [int]$BackendPort = 8000,
     [string]$PythonExe = "",
     [ValidateRange(2, 8)]
     [int]$WorkerCount = 4
@@ -85,7 +87,13 @@ $frontendFiles = @("index.html", "app.js", "styles.css", "v16.css", "catalogs.cs
 foreach ($file in $frontendFiles) {
     Copy-Item (Join-Path $sourceRoot "frontend\$file") $frontendRoot -Force
 }
-Copy-Item (Join-Path $sourceRoot "deploy\windows\web.config") $frontendRoot -Force
+$webConfigTemplate = Get-Content (Join-Path $sourceRoot "deploy\windows\web.config") -Raw
+$webConfig = $webConfigTemplate.Replace("__BACKEND_PORT__", [string]$BackendPort)
+[System.IO.File]::WriteAllText(
+    (Join-Path $frontendRoot "web.config"),
+    $webConfig,
+    (New-Object System.Text.UTF8Encoding($false))
+)
 Set-Content -Path (Join-Path $frontendRoot "config.js") -Encoding UTF8 -Value 'window.APP_CONFIG = { API_URL: "/api", GOOGLE_CLIENT_ID: "" };'
 
 if (-not (Test-Path (Join-Path $venvRoot "Scripts\python.exe"))) {
@@ -157,7 +165,7 @@ finally {
     Pop-Location
 }
 
-$webArguments = "-m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers $WorkerCount --proxy-headers --forwarded-allow-ips 127.0.0.1 --log-config logging.json"
+$webArguments = "-m uvicorn app.main:app --host 127.0.0.1 --port $BackendPort --workers $WorkerCount --proxy-headers --forwarded-allow-ips 127.0.0.1 --log-config logging.json"
 $taskAction = New-ScheduledTaskAction -Execute $python -Argument $webArguments -WorkingDirectory $backendRoot
 $jobsAction = New-ScheduledTaskAction -Execute $python -Argument "-m app.jobs" -WorkingDirectory $backendRoot
 $taskTrigger = New-ScheduledTaskTrigger -AtStartup
@@ -198,7 +206,7 @@ Start-ScheduledTask -TaskName $jobsTaskName
 $backendHealthy = $false
 for ($attempt = 1; $attempt -le 60; $attempt++) {
     try {
-        $backendHealth = Invoke-RestMethod -Uri "http://127.0.0.1:8000/health" -TimeoutSec 2
+        $backendHealth = Invoke-RestMethod -Uri "http://127.0.0.1:$BackendPort/health" -TimeoutSec 2
         if ($backendHealth.status -eq "ok") {
             $backendHealthy = $true
             break

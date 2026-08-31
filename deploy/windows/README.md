@@ -69,6 +69,16 @@ Nếu Python không có trong `PATH`, truyền đường dẫn đầy đủ, ví
 ./deploy/windows/deploy-iis.ps1 -PythonExe "D:\Program Files\Python312\python.exe"
 ```
 
+Nếu máy chạy thêm ứng dụng khác đang dùng backend port `8000`, chọn port riêng,
+ví dụ máy local dùng `8001`:
+
+```powershell
+./deploy/windows/deploy-iis.ps1 -BackendPort 8001
+```
+
+Script cập nhật đồng thời Uvicorn và IIS reverse proxy theo port này. Production
+không truyền tham số vẫn dùng mặc định `8000`.
+
 Truy cập: `http://localhost:8088`.
 
 ## 4. Import Danh mục vật tư
