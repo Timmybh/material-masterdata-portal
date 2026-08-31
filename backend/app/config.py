@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     auto_import_hour: int = 19
     auto_import_minute: int = 0
     auto_import_timezone: str = "Asia/Ho_Chi_Minh"
+    import_spool_dir: str = "import-spool"
+    import_job_poll_seconds: float = 1.0
     run_background_jobs: bool = True
     init_db_on_startup: bool = True
     db_pool_size: int = 5

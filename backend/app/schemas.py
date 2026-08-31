@@ -99,15 +99,23 @@ class AutoImportConfigOut(AutoImportConfigUpdate):
     updated_at:datetime
 class ImportRunHistoryOut(BaseModel):
     id:int
+    job_id:UUID|None=None
     trigger:str
     source_name:str
     status:str
+    phase:str|None=None
+    queued_at:datetime|None=None
     started_at:datetime
     completed_at:datetime|None=None
+    processed:int|None=None
+    total_rows:int|None=None
+    duration_seconds:float|None=None
     imported:int|None=None
     skipped:int|None=None
     error:str|None=None
     model_config={"from_attributes":True}
+class ImportJobOut(ImportRunHistoryOut):
+    job_id:UUID
 class RequestOut(RequestFields):
     id:UUID; result_item_code:str|None; accounting_note:str|None=None; status:str; returned_reason:str|None; submitted_at:datetime; code_issued_at:datetime|None=None; created_at:datetime; updated_at:datetime; requester:UserOut
     model_config={"from_attributes":True}

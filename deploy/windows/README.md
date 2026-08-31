@@ -6,6 +6,8 @@ Kiến trúc production không Docker:
 - IIS URL Rewrite + ARR chuyển `/api` và `/health` về `127.0.0.1:8000`.
 - FastAPI/Uvicorn chạy 4 worker dưới Windows Startup Task `MaterialMasterdataBackend`.
 - Job import/hết hạn chạy riêng dưới Startup Task `MaterialMasterdataJobs`.
+- Upload thủ công chỉ tạo job bền vững trong PostgreSQL rồi trả HTTP `202`; file chờ xử lý nằm tại `C:\Applications\MaterialMasterdataPortal\import-spool`.
+- Cả hai Startup Task có `ExecutionTimeLimit = PT0S`; import không bị giới hạn bởi thời gian chờ của IIS/Uvicorn.
 - PostgreSQL 18 chạy native dưới Windows Service của PostgreSQL.
 
 ## 1. Cài phần mềm nền
@@ -48,7 +50,7 @@ C:\Applications\MaterialMasterdataPortal\backend\.env
 Mở file này và thay tối thiểu:
 
 ```dotenv
-DATABASE_URL=postgresql+psycopg://postgres:MAT_KHAU_POSTGRES@127.0.0.1:5432/masterdata
+DATABASE_URL=REPLACE_WITH_DATABASE_URL
 JWT_SECRET=CHUOI_BI_MAT_DAI_NGAU_NHIEN
 BOOTSTRAP_ADMIN_PASSWORD=MAT_KHAU_ADMIN_AN_TOAN
 ```
@@ -79,6 +81,8 @@ C:\MaterialMasterdataData\Danh muc vat tu.xlsx
 
 Admin có thể đổi đường dẫn và giờ chạy tại màn hình **Quản trị**. Đường dẫn phải là đường dẫn nhìn thấy từ tài khoản chạy Startup Task.
 
+Import thủ công và tự động dùng chung một hàng đợi. PostgreSQL chỉ cho phép một job ở trạng thái `queued`/`running`; advisory lock giữ suốt giao dịch thay thế dữ liệu nên nhiều web worker hoặc nhiều tiến trình job không thể chạy import trùng nhau. Nếu tiến trình job dừng giữa chừng, PostgreSQL rollback dữ liệu và lần khởi động sau đánh dấu job `failed`; job còn `queued` vẫn tiếp tục được xử lý.
+
 Với file trên thư mục share/UNC, đổi tài khoản chạy task trong Task Scheduler sang tài khoản domain có quyền đọc thư mục share.
 
 ## 5. Nâng cấp source
@@ -95,6 +99,7 @@ Script dừng backend, cập nhật source/dependency, cập nhật Windows Star
 
 ```powershell
 Get-ScheduledTask -TaskName MaterialMasterdataBackend,MaterialMasterdataJobs
+Get-ScheduledTask -TaskName MaterialMasterdataBackend,MaterialMasterdataJobs | Select-Object TaskName,@{N='ExecutionTimeLimit';E={$_.Settings.ExecutionTimeLimit}}
 Invoke-RestMethod http://127.0.0.1:8000/health
 Invoke-RestMethod http://127.0.0.1:8088/health
 ```

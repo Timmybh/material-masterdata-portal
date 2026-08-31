@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: masterdata
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: "12345678"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
     ports:
       - "5432:5432"
     volumes:
@@ -19,7 +19,7 @@ services:
     build: ./backend
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+psycopg://postgres:12345678@postgres:5432/masterdata
+      DATABASE_URL: "postgresql+psycopg://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/masterdata"
     depends_on:
       postgres:
         condition: service_healthy
@@ -32,7 +32,7 @@ services:
     build: ./backend
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+psycopg://postgres:12345678@postgres:5432/masterdata
+      DATABASE_URL: "postgresql+psycopg://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/masterdata"
       AUTO_IMPORT_FILE_PATH: /data/Danh muc vat tu.xlsx
     depends_on:
       db-init:

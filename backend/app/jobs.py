@@ -4,7 +4,7 @@ import logging
 import logging.config
 from pathlib import Path
 
-from .auto_import import auto_import_worker, recover_interrupted_import
+from .auto_import import auto_import_worker, import_job_worker, recover_interrupted_import
 from .request_expiry import request_expiry_worker
 
 
@@ -21,7 +21,11 @@ async def main() -> None:
     if recover_interrupted_import():
         logger.warning("Recovered an interrupted item import state")
     logger.info("Background jobs started")
-    await asyncio.gather(request_expiry_worker(), auto_import_worker())
+    await asyncio.gather(
+        request_expiry_worker(),
+        auto_import_worker(),
+        import_job_worker(),
+    )
 
 
 if __name__ == "__main__":

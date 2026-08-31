@@ -16,6 +16,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 $sourceRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $backendRoot = Join-Path $InstallRoot "backend"
 $frontendRoot = Join-Path $InstallRoot "frontend"
+$importSpoolRoot = Join-Path $InstallRoot "import-spool"
 $venvRoot = Join-Path $InstallRoot ".venv"
 $serviceName = "MaterialMasterdataBackend"
 $taskName = "MaterialMasterdataBackend"
@@ -74,7 +75,7 @@ if ($existingService) {
     Start-Sleep -Seconds 1
 }
 
-New-Item -ItemType Directory -Force -Path $backendRoot, $frontendRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $backendRoot, $frontendRoot, $importSpoolRoot | Out-Null
 Copy-Item (Join-Path $sourceRoot "backend\app") $backendRoot -Recurse -Force
 Copy-Item (Join-Path $sourceRoot "backend\import_items.py") $backendRoot -Force
 Copy-Item (Join-Path $sourceRoot "backend\requirements.txt") $backendRoot -Force
@@ -133,6 +134,8 @@ function Set-EnvValue {
 
 Set-EnvValue -Path $envFile -Name "RUN_BACKGROUND_JOBS" -Value "false"
 Set-EnvValue -Path $envFile -Name "INIT_DB_ON_STARTUP" -Value "false"
+Set-EnvValue -Path $envFile -Name "IMPORT_SPOOL_DIR" -Value $importSpoolRoot
+Set-EnvValue -Path $envFile -Name "IMPORT_JOB_POLL_SECONDS" -Value "1"
 Set-EnvValue -Path $envFile -Name "DB_POOL_SIZE" -Value "5"
 Set-EnvValue -Path $envFile -Name "DB_MAX_OVERFLOW" -Value "5"
 Set-EnvValue -Path $envFile -Name "DB_POOL_TIMEOUT_SECONDS" -Value "5"

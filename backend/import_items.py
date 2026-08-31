@@ -2,6 +2,7 @@ import argparse,csv,json
 from datetime import datetime,timedelta
 from decimal import Decimal,InvalidOperation
 from pathlib import Path
+from typing import Callable
 from openpyxl import load_workbook
 from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert
@@ -31,13 +32,18 @@ def source_rows(path):
     wb=load_workbook(path,read_only=True,data_only=True);ws=wb[wb.sheetnames[0]]
     rows=ws.iter_rows(values_only=True)
     return next(rows),rows,wb
-def run(path:str,initialize_schema:bool=False):
+ProgressCallback = Callable[[str, int | None, int | None], None]
+
+
+def run(path:str,initialize_schema:bool=False,progress_callback:ProgressCallback|None=None):
     if initialize_schema:init_db()
+    if progress_callback:progress_callback("validating",0,None)
     raw_headers,rows,source=source_rows(path)
     headers=[h if h not in (None,"") else f"__unnamed_{i}" for i,h in enumerate(raw_headers)];pos={h:i for i,h in enumerate(headers)}
-    prepared=[];skipped=0
+    prepared=[];skipped=0;parsed=0
     try:
       for row in rows:
+        parsed+=1
         data={dest:clean(row[pos[src]]) for src,dest in COLUMNS.items() if src in pos}
         if data.get("id") is None or data.get("code") is None or data.get("name") is None:skipped+=1;continue
         for k in BOOL_FIELDS:data[k]=as_bool(data.get(k))
@@ -53,16 +59,22 @@ def run(path:str,initialize_schema:bool=False):
         data["extra_data"]=json.dumps(extras,ensure_ascii=False,default=str) if extras else None
         data["search_text"]=norm(*(data.get(k) for k in ("new_code","old_code","code","name","name2","item_custom","item_type_name","parent_code","item_group_code","kind_code","customer_code","product_cost_info","branch_code")))
         prepared.append(data)
+        if progress_callback and parsed%5000==0:progress_callback("validating",parsed,None)
     finally:
       source.close()
     if not prepared:raise ValueError("File không có dòng mặt hàng hợp lệ; giữ nguyên dữ liệu hiện tại")
+    total=len(prepared)
+    if progress_callback:progress_callback("importing",0,total)
     with SessionLocal.begin() as db:
       db.execute(delete(Item))
       for start in range(0,len(prepared),1000):
         batch=prepared[start:start+1000]
         db.execute(insert(Item).values(batch))
-        print(f"Imported {min(start+len(batch),len(prepared))}")
-    total=len(prepared);print(f"Done: {total} items; skipped: {skipped}")
+        processed=min(start+len(batch),len(prepared))
+        if progress_callback:progress_callback("importing",processed,total)
+        print(f"Imported {processed}")
+    if progress_callback:progress_callback("finalizing",total,total)
+    print(f"Done: {total} items; skipped: {skipped}")
     return {"imported":total,"skipped":skipped}
 if __name__=="__main__":
     p=argparse.ArgumentParser();p.add_argument("xlsx");run(p.parse_args().xlsx,initialize_schema=True)

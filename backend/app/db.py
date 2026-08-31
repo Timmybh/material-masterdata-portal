@@ -80,6 +80,20 @@ def init_db():
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_items_code_lower_trgm ON items USING GIN (LOWER(code) gin_trgm_ops)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_items_old_code_trgm ON items USING GIN (old_code gin_trgm_ops)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_items_new_code_trgm ON items USING GIN (new_code gin_trgm_ops)"))
+        import_job_columns = {
+            "job_id": "UUID", "source_path": "TEXT", "schedule_key": "VARCHAR(100)",
+            "phase": "VARCHAR(30)", "queued_at": "TIMESTAMPTZ", "worker_id": "VARCHAR(255)",
+            "processed": "INTEGER", "total_rows": "INTEGER", "duration_seconds": "NUMERIC(12,3)",
+        }
+        for name, sql_type in import_job_columns.items():
+            conn.execute(text(f"ALTER TABLE import_run_history ADD COLUMN IF NOT EXISTS {name} {sql_type}"))
+        conn.execute(text("UPDATE import_run_history SET queued_at = started_at WHERE queued_at IS NULL"))
+        conn.execute(text("UPDATE import_run_history SET status = CASE status WHEN 'SUCCESS' THEN 'succeeded' WHEN 'FAILED' THEN 'failed' WHEN 'RUNNING' THEN 'failed' ELSE LOWER(status) END"))
+        conn.execute(text("UPDATE import_run_history SET completed_at = COALESCE(completed_at, NOW()), error = COALESCE(error, 'Job import cũ bị gián đoạn trước khi nâng cấp') WHERE status = 'failed' AND completed_at IS NULL"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_import_run_history_job_id ON import_run_history(job_id) WHERE job_id IS NOT NULL"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_import_run_history_schedule_key ON import_run_history(schedule_key) WHERE schedule_key IS NOT NULL"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_import_run_history_one_active ON import_run_history ((1)) WHERE status IN ('queued', 'running')"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_import_run_history_queued_at ON import_run_history(queued_at DESC)"))
         expected=set(item_columns)|{"id","code","name","item_type_name","parent_code","item_group_code","kind_code","customer_code","unit_price","is_active","search_text","source_modified_at"}
         actual=set(conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='items'")).scalars())
         missing=expected-actual
@@ -102,7 +116,8 @@ def init_db():
             db.add(ImportRunHistory(
                 trigger=config.last_trigger or "AUTO",
                 source_name=config.file_path if config.last_trigger == "AUTO" else "Lần import trước khi nâng cấp",
-                status=config.last_status or ("RUNNING" if config.is_running else "FAILED"),
+                status={"SUCCESS":"succeeded","FAILED":"failed","RUNNING":"failed"}.get(config.last_status or "", "failed"),
+                queued_at=config.last_started_at,
                 started_at=config.last_started_at,
                 completed_at=config.last_completed_at,
                 imported=config.last_imported,

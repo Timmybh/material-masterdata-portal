@@ -1,30 +1,44 @@
+import asyncio
 import shutil
-import tempfile
 from pathlib import Path
-from uuid import UUID
-from fastapi import APIRouter,BackgroundTasks,Depends,File,HTTPException,UploadFile,status
+from uuid import UUID,uuid4
+from fastapi import APIRouter,Depends,File,HTTPException,Query,UploadFile,status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from ..auth import require_roles
 from ..db import get_db
-from ..auto_import import ImportAlreadyRunningError,execute_import,get_import_config,import_is_running
+from ..auto_import import ImportAlreadyRunningError,enqueue_import_job,get_import_config,get_import_job,get_import_spool_dir,import_is_running
 from ..models import AutoImportConfig,ImportRunHistory,MaterialRequest,RequestAudit,Role,User,UserAudit
 from ..passwords import hash_password
-from ..schemas import AdminPasswordReset,AdminUserCreate,AutoImportConfigOut,AutoImportConfigUpdate,ImportRunHistoryOut,UserOut,UserRoleUpdate
+from ..schemas import AdminPasswordReset,AdminUserCreate,AutoImportConfigOut,AutoImportConfigUpdate,ImportJobOut,ImportRunHistoryOut,UserOut,UserRoleUpdate
 router=APIRouter(prefix="/api/admin",tags=["admin"]);allowed=require_roles(Role.ADMIN.value)
 
-def import_config_out(config:AutoImportConfig):
+def _persist_uploaded_file(source, target_path:Path):
+    with target_path.open("xb") as target:
+        shutil.copyfileobj(source,target)
+
+def import_config_out(config:AutoImportConfig,db:Session):
+    last_auto=db.scalar(
+        select(ImportRunHistory)
+        .where(ImportRunHistory.trigger=="AUTO")
+        .order_by(ImportRunHistory.queued_at.desc(),ImportRunHistory.id.desc())
+        .limit(1)
+    )
     return {
         "enabled":config.enabled,"file_path":config.file_path,"hour":config.hour,"minute":config.minute,
         "timezone":config.timezone,"is_running":import_is_running(),"scheduler_active":config.enabled,
-        "last_trigger":config.last_trigger,"last_started_at":config.last_started_at,"last_completed_at":config.last_completed_at,
-        "last_status":config.last_status,"last_imported":config.last_imported,"last_skipped":config.last_skipped,
-        "last_error":config.last_error,"updated_at":config.updated_at,
+        "last_trigger":last_auto.trigger if last_auto else None,
+        "last_started_at":last_auto.started_at if last_auto else None,
+        "last_completed_at":last_auto.completed_at if last_auto else None,
+        "last_status":last_auto.status.upper() if last_auto else None,
+        "last_imported":last_auto.imported if last_auto else 0,
+        "last_skipped":last_auto.skipped if last_auto else 0,
+        "last_error":last_auto.error if last_auto else None,"updated_at":config.updated_at,
     }
 
 @router.get("/item-import/config",response_model=AutoImportConfigOut)
 def read_item_import_config(db:Session=Depends(get_db),_:User=Depends(allowed)):
-    return import_config_out(get_import_config(db))
+    return import_config_out(get_import_config(db),db)
 
 @router.put("/item-import/config",response_model=AutoImportConfigOut)
 def update_item_import_config(payload:AutoImportConfigUpdate,db:Session=Depends(get_db),_:User=Depends(allowed)):
@@ -34,27 +48,40 @@ def update_item_import_config(payload:AutoImportConfigUpdate,db:Session=Depends(
     config=get_import_config(db)
     config.enabled=payload.enabled;config.file_path=file_path;config.hour=payload.hour;config.minute=payload.minute
     db.commit();db.refresh(config)
-    return import_config_out(config)
+    return import_config_out(config,db)
 
-@router.get("/item-import/history",response_model=list[ImportRunHistoryOut])
-def read_item_import_history(db:Session=Depends(get_db),_:User=Depends(allowed)):
-    return db.scalars(select(ImportRunHistory).order_by(ImportRunHistory.started_at.desc()).limit(20)).all()
+@router.get("/item-import/history",response_model=list[ImportRunHistoryOut],status_code=status.HTTP_200_OK)
+def read_item_import_history(
+    trigger:str|None=Query(default=None,pattern="^(MANUAL|AUTO)$"),
+    db:Session=Depends(get_db),_:User=Depends(allowed),
+):
+    statement=select(ImportRunHistory)
+    if trigger:statement=statement.where(ImportRunHistory.trigger==trigger)
+    return db.scalars(statement.order_by(ImportRunHistory.queued_at.desc(),ImportRunHistory.id.desc()).limit(20)).all()
 
-@router.post("/item-import/upload",status_code=status.HTTP_202_ACCEPTED)
-async def import_items_from_upload(background_tasks:BackgroundTasks,file:UploadFile=File(...),_:User=Depends(allowed)):
+@router.get("/item-import/jobs/{job_id}",response_model=ImportJobOut,status_code=status.HTTP_200_OK)
+def read_item_import_job(job_id:UUID,db:Session=Depends(get_db),_:User=Depends(allowed)):
+    job=get_import_job(db,job_id)
+    if not job:raise HTTPException(404,"Không tìm thấy job import")
+    return job
+
+@router.post("/item-import/upload",response_model=ImportJobOut,status_code=status.HTTP_202_ACCEPTED)
+async def import_items_from_upload(file:UploadFile=File(...),_:User=Depends(allowed)):
     suffix=Path(file.filename or "").suffix.lower()
     if suffix not in {".xlsx",".csv"}:
         raise HTTPException(422,"Chỉ hỗ trợ file .xlsx hoặc .csv")
     if import_is_running():
         raise HTTPException(409,"Một tác vụ import khác đang chạy")
-    temp_path=None
+    job_id=uuid4()
+    spool_path=get_import_spool_dir()/f"{job_id}{suffix}"
+    enqueued=False
     try:
-        with tempfile.NamedTemporaryFile(prefix="admin-item-import-",suffix=suffix,delete=False) as target:
-            temp_path=Path(target.name)
-            shutil.copyfileobj(file.file,target)
-        background_tasks.add_task(run_uploaded_import,temp_path,file.filename or temp_path.name)
-        temp_path=None
-        return {"message":"Đã tiếp nhận file; hệ thống đang import trong nền"}
+        await asyncio.to_thread(_persist_uploaded_file,file.file,spool_path)
+        job=enqueue_import_job(
+            str(spool_path),"MANUAL",file.filename or spool_path.name,job_id=job_id
+        )
+        enqueued=True
+        return job
     except ImportAlreadyRunningError as exc:
         raise HTTPException(409,str(exc)) from exc
     except (ValueError,FileNotFoundError) as exc:
@@ -63,14 +90,9 @@ async def import_items_from_upload(background_tasks:BackgroundTasks,file:UploadF
         raise HTTPException(422,f"Import thất bại: {exc}") from exc
     finally:
         await file.close()
-        if temp_path:
-            temp_path.unlink(missing_ok=True)
-
-def run_uploaded_import(temp_path:Path,source_name:str=""):
-    try:
-        execute_import(str(temp_path),"MANUAL",source_name or temp_path.name)
-    finally:
-        temp_path.unlink(missing_ok=True)
+        # Sau khi enqueue thành công, worker sở hữu file. Nếu không có job tương
+        # ứng (copy/enqueue lỗi), xóa file mồ côi ngay.
+        if not enqueued:spool_path.unlink(missing_ok=True)
 @router.get("/users",response_model=list[UserOut])
 def users(db:Session=Depends(get_db),_:User=Depends(allowed)):return db.scalars(select(User).order_by(User.created_at.desc())).all()
 @router.post("/users",response_model=UserOut,status_code=201)
