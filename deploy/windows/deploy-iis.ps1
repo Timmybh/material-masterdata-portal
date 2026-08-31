@@ -112,7 +112,7 @@ if (-not (Test-Path $envFile)) {
     return
 }
 $envText = Get-Content $envFile -Raw
-if ($envText -match "CHANGE_ME|CHANGE_TO_A_LONG_RANDOM_SECRET") {
+if ($envText -match "REPLACE_WITH_DATABASE_URL|CHANGE_ME|CHANGE_TO_A_LONG_RANDOM_SECRET") {
     throw "File $envFile still contains sample passwords or secrets. Update it before starting the backend."
 }
 
