@@ -86,7 +86,7 @@ Truy cập: `http://localhost:8088`.
 Đặt file mặc định tại:
 
 ```text
-C:\MaterialMasterdataData\Danh muc vat tu.xlsx
+C:\Applications\MaterialMasterdataData\Data\Danh muc vat tu.xlsx
 ```
 
 Admin có thể đổi đường dẫn và giờ chạy tại màn hình **Quản trị**. Đường dẫn phải là đường dẫn nhìn thấy từ tài khoản chạy Startup Task.
