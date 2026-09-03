@@ -3,7 +3,7 @@
 Kiến trúc production không Docker:
 
 - IIS phục vụ frontend tĩnh tại cổng `8088`.
-- IIS URL Rewrite + ARR chuyển `/api` và `/health` về `127.0.0.1:8000`.
+- IIS URL Rewrite + ARR chuyển `/api` và `/health` về `127.0.0.1:8001`.
 - FastAPI/Uvicorn chạy 4 worker dưới Windows Startup Task `MaterialMasterdataBackend`.
 - Job import/hết hạn chạy riêng dưới Startup Task `MaterialMasterdataJobs`.
 - Upload thủ công chỉ tạo job bền vững trong PostgreSQL rồi trả HTTP `202`; file chờ xử lý nằm tại `C:\Applications\MaterialMasterdataPortal\import-spool`.
@@ -69,15 +69,15 @@ Nếu Python không có trong `PATH`, truyền đường dẫn đầy đủ, ví
 ./deploy/windows/deploy-iis.ps1 -PythonExe "D:\Program Files\Python312\python.exe"
 ```
 
-Nếu máy chạy thêm ứng dụng khác đang dùng backend port `8000`, chọn port riêng,
-ví dụ máy local dùng `8001`:
+Backend production mặc định dùng port `8001`:
 
 ```powershell
 ./deploy/windows/deploy-iis.ps1 -BackendPort 8001
 ```
 
 Script cập nhật đồng thời Uvicorn và IIS reverse proxy theo port này. Production
-không truyền tham số vẫn dùng mặc định `8000`.
+không truyền tham số vẫn dùng mặc định `8001`. Chỉ truyền `-BackendPort` khi
+cần triển khai một instance khác trên cổng riêng.
 
 Truy cập: `http://localhost:8088`.
 
@@ -110,7 +110,7 @@ Script dừng backend, cập nhật source/dependency, cập nhật Windows Star
 ```powershell
 Get-ScheduledTask -TaskName MaterialMasterdataBackend,MaterialMasterdataJobs
 Get-ScheduledTask -TaskName MaterialMasterdataBackend,MaterialMasterdataJobs | Select-Object TaskName,@{N='ExecutionTimeLimit';E={$_.Settings.ExecutionTimeLimit}}
-Invoke-RestMethod http://127.0.0.1:8000/health
+Invoke-RestMethod http://127.0.0.1:8001/health
 Invoke-RestMethod http://127.0.0.1:8088/health
 ```
 

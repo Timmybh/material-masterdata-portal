@@ -3,7 +3,7 @@ param(
     [string]$SiteName = "MaterialMasterdataPortal",
     [int]$SitePort = 8088,
     [ValidateRange(1024, 65535)]
-    [int]$BackendPort = 8000,
+    [int]$BackendPort = 8001,
     [string]$PythonExe = "",
     [ValidateRange(2, 8)]
     [int]$WorkerCount = 4
